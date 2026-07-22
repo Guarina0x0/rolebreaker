@@ -29,7 +29,7 @@ object PrivilegeOrderDialog {
     fun open(ctx: AppContext) {
         val personas = ctx.store.personas.sortedBy { it.level }
         if (personas.size < 2) {
-            JOptionPane.showMessageDialog(null, I18n.t("order.need2"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("order.need2"),
                 I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
             return
         }
@@ -65,7 +65,7 @@ object PrivilegeOrderDialog {
         panel.add(scroll, BorderLayout.CENTER)
         panel.add(buttons, BorderLayout.EAST)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("order.dialogTitle"),
+        val ok = JOptionPane.showConfirmDialog(ctx.uiFrame(), panel, I18n.t("order.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 

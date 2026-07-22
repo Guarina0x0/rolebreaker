@@ -160,6 +160,9 @@ class AppContext(val api: MontoyaApi) {
         api.persistence().preferences().setString(LANG_KEY, lang.name)
     }
 
+    /** Parent for dialogs — BApp Store criterion: GUI must be a child of the Burp suite frame. */
+    fun uiFrame(): java.awt.Frame? = runCatching { api.userInterface().swingUtils().suiteFrame() }.getOrNull()
+
     fun shutdown() = executor.shutdownNow()
 
     companion object {

@@ -25,13 +25,13 @@ object JwtAttackDialog {
     fun open(ctx: AppContext, request: HttpRequest) {
         val tok = extractToken(request)
         if (tok == null) {
-            JOptionPane.showMessageDialog(null, I18n.t("jwtatk.noJwt"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("jwtatk.noJwt"),
                 I18n.t("jwtatk.title"), JOptionPane.INFORMATION_MESSAGE)
             return
         }
         val info = Jwt.parse(tok)
         if (info == null) {
-            JOptionPane.showMessageDialog(null, I18n.t("jwtatk.notParseable"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("jwtatk.notParseable"),
                 I18n.t("jwtatk.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
@@ -58,7 +58,7 @@ object JwtAttackDialog {
         row(I18n.t("jwtatk.roleClaim"), roleClaim)
         row(I18n.t("jwtatk.roleValue"), roleValue)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("jwtatk.title"),
+        val ok = JOptionPane.showConfirmDialog(ctx.uiFrame(), panel, I18n.t("jwtatk.title"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 

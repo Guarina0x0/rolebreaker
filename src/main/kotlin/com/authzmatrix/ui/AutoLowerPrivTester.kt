@@ -14,7 +14,7 @@ object AutoLowerPrivTester {
     fun run(ctx: AppContext, requests: List<HttpRequest>) {
         if (requests.isEmpty()) return
         if (ctx.store.personas.isEmpty()) {
-            JOptionPane.showMessageDialog(null, I18n.t("lower.noPersonas"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("lower.noPersonas"),
                 I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
@@ -26,7 +26,7 @@ object AutoLowerPrivTester {
 
         ctx.api.logging().logToOutput(I18n.t("lower.log", tested))
         if (tested == 0) {
-            JOptionPane.showMessageDialog(null, I18n.t("lower.none"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("lower.none"),
                 I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
         }
     }

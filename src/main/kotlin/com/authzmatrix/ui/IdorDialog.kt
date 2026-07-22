@@ -30,7 +30,7 @@ object IdorDialog {
     fun open(ctx: AppContext, request: HttpRequest) {
         val cands = IdorAnalyzer.detect(request)
         if (cands.isEmpty()) {
-            JOptionPane.showMessageDialog(null, I18n.t("idor.none"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("idor.none"),
                 I18n.t("idor.title"), JOptionPane.INFORMATION_MESSAGE)
             return
         }
@@ -54,14 +54,14 @@ object IdorDialog {
         c.gridx = 0; c.gridy = r++; c.gridwidth = 2
         panel.add(JLabel(I18n.t("idor.hint")), c)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("idor.dialogTitle"),
+        val ok = JOptionPane.showConfirmDialog(ctx.uiFrame(), panel, I18n.t("idor.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 
         val cand = (combo.selectedItem as CandItem).cand
         val alts = values.text.split(Regex("[,\\s]+")).map { it.trim() }.filter { it.isNotEmpty() }
         if (alts.isEmpty()) {
-            JOptionPane.showMessageDialog(null, I18n.t("idor.pickValue"), I18n.t("idor.title"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("idor.pickValue"), I18n.t("idor.title"),
                 JOptionPane.WARNING_MESSAGE)
             return
         }

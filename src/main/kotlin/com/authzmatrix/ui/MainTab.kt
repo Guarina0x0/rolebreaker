@@ -346,10 +346,21 @@ class MainTab(private val ctx: AppContext) {
         findingsModel.set((derived + manualFindings).sortedBy { it.severity.ordinal })
     }
 
+    /** Run [body] on a background thread with try/catch (Burp doesn't catch bg-thread exceptions). */
+    private fun bg(name: String, body: () -> Unit) {
+        Thread({
+            try {
+                body()
+            } catch (e: Throwable) {
+                ctx.api.logging().logToError("RoleBreaker: background task '$name' failed: ${e.message}")
+            }
+        }, name).start()
+    }
+
     private fun autoSweep() {
         val input = JOptionPane.showInputDialog(root, I18n.t("sweep.prompt"), "20") ?: return
         val minutes = input.trim().toLongOrNull()?.coerceAtLeast(1) ?: 20L
-        Thread({
+        bg("rolebreaker-auto-sweep") {
             ctx.historyScanner.scan(minutes, true)
             ctx.store.syncPersonasFromTokens()
             com.authzmatrix.core.PrivilegeRanker.assignLevels(ctx.store.personas)
@@ -374,13 +385,13 @@ class MainTab(private val ctx: AppContext) {
                 JOptionPane.showMessageDialog(root, I18n.t("sweep.launched", reqs.size, minutes, order),
                     I18n.t("sweep.title"), JOptionPane.INFORMATION_MESSAGE)
             }
-        }, "rolebreaker-auto-sweep").start()
+        }
     }
 
     private fun scanHistory() {
         val input = JOptionPane.showInputDialog(root, I18n.t("scan.prompt"), "60") ?: return
         val minutes = input.trim().toLongOrNull()?.coerceAtLeast(1) ?: 60L
-        Thread({
+        bg("rolebreaker-history-scan") {
             val n = ctx.historyScanner.scan(minutes, true)
             val created = ctx.store.syncPersonasFromTokens()
             SwingUtilities.invokeLater {
@@ -389,7 +400,7 @@ class MainTab(private val ctx: AppContext) {
                     I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
                 offerPrivilegeOrder()
             }
-        }, "rolebreaker-history-scan").start()
+        }
     }
 
     private fun syncPersonas() {
@@ -426,10 +437,10 @@ class MainTab(private val ctx: AppContext) {
                 I18n.t("crack.title"), JOptionPane.INFORMATION_MESSAGE)
             return
         }
-        Thread({
+        bg("rolebreaker-jwt-crack") {
             val hit = com.authzmatrix.core.JwtCracker.crack(t.token, com.authzmatrix.core.JwtCracker.COMMON_SECRETS)
             SwingUtilities.invokeLater { reportCrack(t.token, hit, I18n.t("crack.commonList"), offerWordlist = true) }
-        }, "rolebreaker-jwt-crack").start()
+        }
     }
 
     private fun reportCrack(token: String, hit: String?, source: String, offerWordlist: Boolean) {
@@ -455,7 +466,7 @@ class MainTab(private val ctx: AppContext) {
         val fc = JFileChooser()
         if (fc.showOpenDialog(root) != JFileChooser.APPROVE_OPTION) return
         val file = fc.selectedFile
-        Thread({
+        bg("rolebreaker-jwt-crack-wl") {
             val words = try {
                 java.nio.file.Files.readAllLines(file.toPath()).map { it.trim() }.filter { it.isNotEmpty() }
             } catch (ex: Exception) {
@@ -463,11 +474,11 @@ class MainTab(private val ctx: AppContext) {
                     JOptionPane.showMessageDialog(root, I18n.t("crack.wordlistErr", ex.message ?: ""), I18n.t("crack.title"),
                         JOptionPane.ERROR_MESSAGE)
                 }
-                return@Thread
+                return@bg
             }
             val hit2 = com.authzmatrix.core.JwtCracker.crack(token, words)
             SwingUtilities.invokeLater { reportCrack(token, hit2, I18n.t("crack.wordlist", words.size), offerWordlist = false) }
-        }, "rolebreaker-jwt-crack-wl").start()
+        }
     }
 
     private fun export(kind: String) {

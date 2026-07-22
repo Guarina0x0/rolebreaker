@@ -30,7 +30,7 @@ object RefreshAssignDialog {
     fun open(ctx: AppContext, request: HttpRequest) {
         val personas = ctx.store.personas.filter { !it.anonymous }
         if (personas.isEmpty()) {
-            JOptionPane.showMessageDialog(null, I18n.t("refresh.noPersonas"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("refresh.noPersonas"),
                 I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
@@ -56,7 +56,7 @@ object RefreshAssignDialog {
         c.gridwidth = 1
         c.gridx = 1; c.gridy = r++; panel.add(testNow, c)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("refresh.dialogTitle"),
+        val ok = JOptionPane.showConfirmDialog(ctx.uiFrame(), panel, I18n.t("refresh.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 
@@ -70,19 +70,23 @@ object RefreshAssignDialog {
             return
         }
         Thread({
-            val tok = ctx.refreshEngine.refresh(p)
-            SwingUtilities.invokeLater {
-                if (tok == null) {
-                    JOptionPane.showMessageDialog(null, I18n.t("refresh.noToken"), I18n.t("dlg.title"),
-                        JOptionPane.WARNING_MESSAGE)
-                } else {
-                    p.token = tok
-                    Jwt.parse(tok)?.sub?.let { p.ownerSub = it }
-                    ctx.store.capture(tok, I18n.t("refresh.reloginSrc", p.name))
-                    val info = Jwt.parse(tok)
-                    JOptionPane.showMessageDialog(null, I18n.t("refresh.ok", info?.summary() ?: I18n.t("refresh.opaque")),
-                        I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
+            try {
+                val tok = ctx.refreshEngine.refresh(p)
+                SwingUtilities.invokeLater {
+                    if (tok == null) {
+                        JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("refresh.noToken"), I18n.t("dlg.title"),
+                            JOptionPane.WARNING_MESSAGE)
+                    } else {
+                        p.token = tok
+                        Jwt.parse(tok)?.sub?.let { p.ownerSub = it }
+                        ctx.store.capture(tok, I18n.t("refresh.reloginSrc", p.name))
+                        val info = Jwt.parse(tok)
+                        JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("refresh.ok", info?.summary() ?: I18n.t("refresh.opaque")),
+                            I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
+                    }
                 }
+            } catch (e: Throwable) {
+                ctx.api.logging().logToError("RoleBreaker: refresh test failed: ${e.message}")
             }
         }, "rolebreaker-refresh-test").start()
     }

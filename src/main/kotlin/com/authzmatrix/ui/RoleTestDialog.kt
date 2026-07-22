@@ -27,7 +27,7 @@ object RoleTestDialog {
         if (requests.isEmpty()) return
         val personas = ctx.store.personas.toList()
         if (personas.isEmpty()) {
-            JOptionPane.showMessageDialog(null, I18n.t("role.noPersonas"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("role.noPersonas"),
                 I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
@@ -57,13 +57,13 @@ object RoleTestDialog {
         panel.add(scroll, BorderLayout.CENTER)
         panel.add(Box.createHorizontalBox().apply { add(toggle) }, BorderLayout.SOUTH)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("role.dialogTitle"),
+        val ok = JOptionPane.showConfirmDialog(ctx.uiFrame(), panel, I18n.t("role.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 
         val selected = checks.filter { it.first.isSelected }.map { it.second }
         if (selected.isEmpty()) {
-            JOptionPane.showMessageDialog(null, I18n.t("role.pickOne"), I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("role.pickOne"), I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
         requests.forEach { req ->
