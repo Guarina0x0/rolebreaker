@@ -1,8 +1,25 @@
-# AuthZ Matrix (JWT) — Burp Suite Extension
+# RoleBreaker — Burp Suite Extension
 
 A Burp Suite extension for **broken access control** and **privilege escalation** testing, driven by JWTs and multiple roles. Think of it as *Authorize* but designed around a per-role **access matrix** (endpoint × persona) with automatic token discovery, JWT security analysis, and a curated Findings view.
 
 > **Feature requests and bug reports are welcome — open a [GitHub Issue](../../issues).**
+
+---
+
+## Demo
+
+A full run against a small two-role JWT API: log in as both roles, one click on
+**Auto sweep**, and RoleBreaker replays every request as the lower-privilege role and ranks
+the broken-access findings.
+
+![RoleBreaker walkthrough](screenshots/rolebreaker-demo.gif)
+
+| Starting state | Results |
+|---|---|
+| ![overview](screenshots/01-overview.png) | ![results](screenshots/02-results.png) |
+
+In the matrix, the `user` column is amber/red on the endpoints that leak (vertical privesc +
+IDOR), while the one correctly-enforced endpoint (`POST …/delete`) stays **green (403)**.
 
 ---
 

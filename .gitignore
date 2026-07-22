@@ -4,3 +4,11 @@ build/
 *.iml
 .DS_Store
 local.properties
+
+# Demo media: keep the optimized GIF + screenshots, not the raw/large sources
+screenshots/*.mov
+screenshots/demo-raw.*
+screenshots/rolebreaker-demo.mp4
+
+# Local-only intentionally-vulnerable demo app (not published)
+demo-lab/
