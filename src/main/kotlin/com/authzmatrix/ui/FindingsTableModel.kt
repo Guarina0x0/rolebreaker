@@ -1,5 +1,6 @@
 package com.authzmatrix.ui
 
+import com.authzmatrix.core.I18n
 import com.authzmatrix.model.Finding
 import com.authzmatrix.model.Severity
 import javax.swing.table.AbstractTableModel
@@ -8,7 +9,7 @@ import javax.swing.table.AbstractTableModel
 class FindingsTableModel : AbstractTableModel() {
 
     private val items = ArrayList<Finding>()
-    private val cols = arrayOf("Severidad", "Tipo", "Detalle")
+    private val colKeys = arrayOf("col.severity", "col.type", "col.detail")
 
     fun set(list: List<Finding>) {
         items.clear()
@@ -19,9 +20,12 @@ class FindingsTableModel : AbstractTableModel() {
     fun findingAt(i: Int): Finding? = items.getOrNull(i)
     fun severityAt(i: Int): Severity? = items.getOrNull(i)?.severity
 
+    /** Re-read headers (e.g. after a language change). */
+    fun structureChanged() = fireTableStructureChanged()
+
     override fun getRowCount() = items.size
-    override fun getColumnCount() = cols.size
-    override fun getColumnName(c: Int) = cols[c]
+    override fun getColumnCount() = colKeys.size
+    override fun getColumnName(c: Int) = I18n.t(colKeys[c])
     override fun isCellEditable(r: Int, c: Int) = false
 
     override fun getValueAt(r: Int, c: Int): Any {

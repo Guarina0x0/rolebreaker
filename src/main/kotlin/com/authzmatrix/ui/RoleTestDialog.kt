@@ -2,6 +2,7 @@ package com.authzmatrix.ui
 
 import burp.api.montoya.http.message.requests.HttpRequest
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.I18n
 import com.authzmatrix.core.Jwt
 import com.authzmatrix.model.Persona
 import java.awt.BorderLayout
@@ -26,8 +27,8 @@ object RoleTestDialog {
         if (requests.isEmpty()) return
         val personas = ctx.store.personas.toList()
         if (personas.isEmpty()) {
-            JOptionPane.showMessageDialog(null, "No hay personas definidas. Escanea el HTTP history primero.",
-                "AuthZ Matrix", JOptionPane.WARNING_MESSAGE)
+            JOptionPane.showMessageDialog(null, I18n.t("role.noPersonas"),
+                I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
         val request = requests.first()
@@ -40,48 +41,45 @@ object RoleTestDialog {
         list.layout = BoxLayout(list, BoxLayout.Y_AXIS)
         checks.forEach { list.add(it.first) }
 
-        val toggle = JButton("Marcar / desmarcar todo")
+        val toggle = JButton(I18n.t("role.toggleAll"))
         toggle.addActionListener {
             val target = checks.any { !it.first.isSelected }
             checks.forEach { it.first.isSelected = target }
         }
 
         val target = if (requests.size == 1) "${esc(request.method())} ${esc(request.pathWithoutQuery())}"
-        else "${requests.size} peticiones"
+        else I18n.t("role.nRequests", requests.size)
         val panel = JPanel(BorderLayout(0, 6))
-        panel.add(JLabel("<html>Reenvía <b>$target</b> con el token de cada rol marcado." +
-            "<br>La respuesta original (baseline) es la referencia.</html>"),
-            BorderLayout.NORTH)
+        panel.add(JLabel(I18n.t("role.header", target)), BorderLayout.NORTH)
         val scroll = JScrollPane(list)
         scroll.preferredSize = Dimension(480, 220)
-        scroll.border = BorderFactory.createTitledBorder("Roles a probar")
+        scroll.border = BorderFactory.createTitledBorder(I18n.t("role.rolesToTest"))
         panel.add(scroll, BorderLayout.CENTER)
         panel.add(Box.createHorizontalBox().apply { add(toggle) }, BorderLayout.SOUTH)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, "Probar acción como…",
+        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("role.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 
         val selected = checks.filter { it.first.isSelected }.map { it.second }
         if (selected.isEmpty()) {
-            JOptionPane.showMessageDialog(null, "Marca al menos un rol.", "AuthZ Matrix", JOptionPane.WARNING_MESSAGE)
+            JOptionPane.showMessageDialog(null, I18n.t("role.pickOne"), I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
         requests.forEach { req ->
             ctx.submitTest(req, "${req.method()} ${req.pathWithoutQuery()}", selected)
         }
-        ctx.api.logging().logToOutput(
-            "AuthZ Matrix: probando ${requests.size} petición(es) como ${selected.size} rol(es).")
+        ctx.api.logging().logToOutput(I18n.t("role.log", requests.size, selected.size))
     }
 
     private fun describe(p: Persona): String {
-        if (p.anonymous) return "${p.name}  (anónimo)"
+        if (p.anonymous) return "${p.name}  (${I18n.t("role.st.anon")})"
         val info = Jwt.parse(p.token)
         val state = when {
-            p.token.isBlank() -> "sin token"
-            info == null -> "token opaco"
-            info.isExpired() -> "⚠ EXPIRADO"
-            else -> "ok"
+            p.token.isBlank() -> I18n.t("role.st.noToken")
+            info == null -> I18n.t("role.st.opaque")
+            info.isExpired() -> I18n.t("role.st.expired")
+            else -> I18n.t("role.st.ok")
         }
         val owner = info?.owner?.let { " · $it" } ?: ""
         return "${p.name}$owner  [$state]"

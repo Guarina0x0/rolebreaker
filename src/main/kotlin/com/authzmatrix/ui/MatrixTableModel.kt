@@ -1,5 +1,6 @@
 package com.authzmatrix.ui
 
+import com.authzmatrix.core.I18n
 import com.authzmatrix.core.PersonaStore
 import com.authzmatrix.model.AccessResult
 import com.authzmatrix.model.MatrixRow
@@ -65,8 +66,8 @@ class MatrixTableModel(private val store: PersonaStore) : AbstractTableModel() {
     override fun getColumnCount() = FIXED + personaCols.size
 
     override fun getColumnName(col: Int): String = when (col) {
-        0 -> "Request"
-        1 -> "Base"
+        0 -> I18n.t("col.request")
+        1 -> I18n.t("col.base")
         else -> personaForColumn(col)?.name ?: "?"
     }
 
@@ -85,7 +86,7 @@ class MatrixTableModel(private val store: PersonaStore) : AbstractTableModel() {
 
     fun exportCsv(): String {
         val sb = StringBuilder()
-        sb.append(listOf("Request", "Base").plus(personaCols.map { it.name }).joinToString(",") { csv(it) })
+        sb.append(listOf(I18n.t("col.request"), I18n.t("col.base")).plus(personaCols.map { it.name }).joinToString(",") { csv(it) })
         sb.append("\n")
         rows.forEach { row ->
             val cells = ArrayList<String>()
@@ -105,7 +106,8 @@ class MatrixTableModel(private val store: PersonaStore) : AbstractTableModel() {
         sb.append("<html><head><meta charset='utf-8'><style>")
         sb.append("table{border-collapse:collapse;font-family:sans-serif;font-size:13px}")
         sb.append("td,th{border:1px solid #999;padding:4px 8px}th{background:#eee}</style></head><body>")
-        sb.append("<h2>AuthZ Matrix</h2><table><tr><th>Request</th><th>Base</th>")
+        sb.append("<h2>RoleBreaker</h2><table><tr><th>").append(esc(I18n.t("col.request")))
+            .append("</th><th>").append(esc(I18n.t("col.base"))).append("</th>")
         personaCols.forEach { sb.append("<th>").append(esc(it.name)).append("</th>") }
         sb.append("</tr>")
         rows.forEach { row ->

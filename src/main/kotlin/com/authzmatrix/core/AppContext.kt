@@ -41,6 +41,9 @@ class AppContext(val api: MontoyaApi) {
     var rowSink: (MatrixRow) -> Unit = {}
 
     init {
+        // Restore saved language (default English) before the UI is built.
+        if (api.persistence().preferences().getString(LANG_KEY) == "ES") I18n.initLang(I18n.Lang.ES)
+
         // Restore saved personas (if any) and auto-persist on every change.
         PersonaPersistence.load(api.persistence().preferences())?.let { saved ->
             store.personas.clear()
@@ -49,7 +52,7 @@ class AppContext(val api: MontoyaApi) {
         store.onChange { PersonaPersistence.save(api.persistence().preferences(), store.personas) }
         replay.onActivity = { entry -> activitySink(entry) }
         store.onPersonaRefreshed = { p, source ->
-            api.logging().logToOutput("AuthZ Matrix: token de '${p.name}' refrescado (sub=${p.ownerSub}) desde $source")
+            api.logging().logToOutput("RoleBreaker: token for '${p.name}' refreshed (sub=${p.ownerSub}) from $source")
         }
         replay.refresher = { p -> maybeRefresh(p) }
     }
@@ -64,8 +67,8 @@ class AppContext(val api: MontoyaApi) {
             if (tok == p.token) return
             p.token = tok
             Jwt.parse(tok)?.sub?.let { p.ownerSub = it }
-            store.capture(tok, "re-login de ${p.name}") // adds to catalog + persists + refreshes UI
-            api.logging().logToOutput("AuthZ Matrix: '${p.name}' re-logueado, token nuevo obtenido")
+            store.capture(tok, I18n.t("refresh.reloginSrc", p.name)) // adds to catalog + persists + refreshes UI
+            api.logging().logToOutput("RoleBreaker: '${p.name}' re-logged in, new token obtained")
         }
     }
 
@@ -152,5 +155,14 @@ class AppContext(val api: MontoyaApi) {
 
     fun resetAutoSeen() { seenInAuto.clear(); seenLower.clear() }
 
+    /** Persist the chosen UI language so it survives Burp restarts. */
+    fun persistLang(lang: I18n.Lang) {
+        api.persistence().preferences().setString(LANG_KEY, lang.name)
+    }
+
     fun shutdown() = executor.shutdownNow()
+
+    companion object {
+        private const val LANG_KEY = "rolebreaker.lang"
+    }
 }

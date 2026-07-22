@@ -1,5 +1,6 @@
 package com.authzmatrix.ui
 
+import com.authzmatrix.core.I18n
 import com.authzmatrix.model.ActivityEntry
 import com.authzmatrix.model.Verdict
 import javax.swing.table.AbstractTableModel
@@ -8,7 +9,10 @@ import javax.swing.table.AbstractTableModel
 class ActivityTableModel : AbstractTableModel() {
 
     private val rows = ArrayList<ActivityEntry>()
-    private val cols = arrayOf("Hora", "Qué", "Método", "URL", "Status", "Bytes", "Veredicto")
+    private val colKeys = arrayOf("col.time", "col.what", "col.method", "col.url", "col.status", "col.bytes", "col.verdict")
+
+    /** Re-read headers (e.g. after a language change). */
+    fun structureChanged() = fireTableStructureChanged()
 
     fun add(e: ActivityEntry) {
         rows += e
@@ -28,8 +32,8 @@ class ActivityTableModel : AbstractTableModel() {
     fun verdictAt(i: Int): Verdict? = rows.getOrNull(i)?.verdict
 
     override fun getRowCount() = rows.size
-    override fun getColumnCount() = cols.size
-    override fun getColumnName(c: Int) = cols[c]
+    override fun getColumnCount() = colKeys.size
+    override fun getColumnName(c: Int) = I18n.t(colKeys[c])
     override fun isCellEditable(r: Int, c: Int) = false
 
     override fun getValueAt(r: Int, c: Int): Any {

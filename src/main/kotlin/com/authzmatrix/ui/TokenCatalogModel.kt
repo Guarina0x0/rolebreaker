@@ -1,6 +1,7 @@
 package com.authzmatrix.ui
 
 import com.authzmatrix.core.CapturedToken
+import com.authzmatrix.core.I18n
 import com.authzmatrix.core.PersonaStore
 import javax.swing.table.AbstractTableModel
 
@@ -8,7 +9,10 @@ import javax.swing.table.AbstractTableModel
 class TokenCatalogModel(private val store: PersonaStore) : AbstractTableModel() {
 
     private var data: List<CapturedToken> = emptyList()
-    private val cols = arrayOf("Rol", "Propietario", "Emisor", "Alg", "Exp", "Seguridad", "Origen")
+    private val colKeys = arrayOf("col.role", "col.owner", "col.issuer", "col.alg", "col.exp", "col.security", "col.source")
+
+    /** Re-read headers (e.g. after a language change). */
+    fun structureChanged() = fireTableStructureChanged()
 
     /** One row per identity (sub+role), keeping the freshest token. Only valid (parseable,
      *  non-expired) JWTs are shown — expired/opaque tokens are hidden. */
@@ -29,8 +33,8 @@ class TokenCatalogModel(private val store: PersonaStore) : AbstractTableModel() 
     fun tokenAt(i: Int): CapturedToken? = data.getOrNull(i)
 
     override fun getRowCount() = data.size
-    override fun getColumnCount() = cols.size
-    override fun getColumnName(c: Int) = cols[c]
+    override fun getColumnCount() = colKeys.size
+    override fun getColumnName(c: Int) = I18n.t(colKeys[c])
     override fun isCellEditable(r: Int, c: Int) = false
 
     override fun getValueAt(r: Int, c: Int): Any {
@@ -43,10 +47,10 @@ class TokenCatalogModel(private val store: PersonaStore) : AbstractTableModel() 
             3 -> info?.alg ?: "-"
             4 -> when {
                 info?.exp == null -> "-"
-                info.isExpired() -> "EXPIRADO"
+                info.isExpired() -> I18n.t("token.expired")
                 else -> info.expInstant().toString()
             }
-            5 -> info?.securityNote() ?: "no-JWT"
+            5 -> info?.securityNote() ?: I18n.t("token.noJwt")
             6 -> t.source
             else -> ""
         }

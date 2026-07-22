@@ -2,6 +2,7 @@ package com.authzmatrix.ui
 
 import burp.api.montoya.http.message.requests.HttpRequest
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.I18n
 import com.authzmatrix.core.IdCandidate
 import com.authzmatrix.core.IdorAnalyzer
 import java.awt.GridBagConstraints
@@ -29,15 +30,14 @@ object IdorDialog {
     fun open(ctx: AppContext, request: HttpRequest) {
         val cands = IdorAnalyzer.detect(request)
         if (cands.isEmpty()) {
-            JOptionPane.showMessageDialog(null,
-                "No se detectaron identificadores (numéricos/UUID) en query, body o path de esta petición.",
-                "IDOR", JOptionPane.INFORMATION_MESSAGE)
+            JOptionPane.showMessageDialog(null, I18n.t("idor.none"),
+                I18n.t("idor.title"), JOptionPane.INFORMATION_MESSAGE)
             return
         }
 
         val combo = JComboBox(cands.map { CandItem(it) }.toTypedArray())
         val values = JTextField(36)
-        val includeOriginal = JCheckBox("Incluir el valor original como fila de referencia", true)
+        val includeOriginal = JCheckBox(I18n.t("idor.includeOriginal"), true)
 
         val panel = JPanel(GridBagLayout())
         val c = GridBagConstraints().apply {
@@ -48,20 +48,20 @@ object IdorDialog {
             c.gridx = 0; c.gridy = r; c.weightx = 0.0; panel.add(JLabel(label), c)
             c.gridx = 1; c.gridy = r; c.weightx = 1.0; panel.add(comp, c); r++
         }
-        addRow("Identificador:", combo)
-        addRow("Valores alternativos (coma/espacio):", values)
+        addRow(I18n.t("idor.identifier"), combo)
+        addRow(I18n.t("idor.altValues"), values)
         c.gridx = 1; c.gridy = r++; panel.add(includeOriginal, c)
         c.gridx = 0; c.gridy = r++; c.gridwidth = 2
-        panel.add(JLabel("<html><i>Cada valor se prueba con todas las personas activas.</i></html>"), c)
+        panel.add(JLabel(I18n.t("idor.hint")), c)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, "IDOR / parameter tampering",
+        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("idor.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 
         val cand = (combo.selectedItem as CandItem).cand
         val alts = values.text.split(Regex("[,\\s]+")).map { it.trim() }.filter { it.isNotEmpty() }
         if (alts.isEmpty()) {
-            JOptionPane.showMessageDialog(null, "Introduce al menos un valor alternativo.", "IDOR",
+            JOptionPane.showMessageDialog(null, I18n.t("idor.pickValue"), I18n.t("idor.title"),
                 JOptionPane.WARNING_MESSAGE)
             return
         }
@@ -74,6 +74,6 @@ object IdorDialog {
             val mutated = IdorAnalyzer.mutate(request, cand, alt)
             ctx.submitTest(mutated, "$base [${cand.name}:${cand.value}→$alt]")
         }
-        ctx.api.logging().logToOutput("AuthZ Matrix: IDOR — ${alts.size} variante(s) encoladas sobre ${cand.display()}")
+        ctx.api.logging().logToOutput(I18n.t("idor.log", alts.size, cand.display()))
     }
 }

@@ -1,6 +1,7 @@
 package com.authzmatrix.ui
 
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.I18n
 import com.authzmatrix.core.Jwt
 import com.authzmatrix.model.Persona
 import java.awt.BorderLayout
@@ -28,8 +29,8 @@ object PrivilegeOrderDialog {
     fun open(ctx: AppContext) {
         val personas = ctx.store.personas.sortedBy { it.level }
         if (personas.size < 2) {
-            JOptionPane.showMessageDialog(null, "Necesitas al menos 2 personas para ordenar privilegios.",
-                "AuthZ Matrix", JOptionPane.INFORMATION_MESSAGE)
+            JOptionPane.showMessageDialog(null, I18n.t("order.need2"),
+                I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
             return
         }
 
@@ -50,8 +51,8 @@ object PrivilegeOrderDialog {
             model.add(j, el)
             list.selectedIndex = j
         }
-        val up = JButton("▲ Subir (más privilegio)").apply { addActionListener { move(-1) } }
-        val down = JButton("▼ Bajar (menos privilegio)").apply { addActionListener { move(1) } }
+        val up = JButton(I18n.t("order.up")).apply { addActionListener { move(-1) } }
+        val down = JButton(I18n.t("order.down")).apply { addActionListener { move(1) } }
         val buttons = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             add(up); add(Box.createVerticalStrut(6)); add(down)
@@ -60,14 +61,11 @@ object PrivilegeOrderDialog {
         val scroll = JScrollPane(list).apply { preferredSize = Dimension(360, 220) }
 
         val panel = JPanel(BorderLayout(8, 8))
-        panel.add(JLabel("<html><b>Ordena los roles por privilegio.</b><br>" +
-            "Arriba = MÁS privilegio · Abajo = MENOS.<br>" +
-            "«probar con menor privilegio» reenviará cada acción a los que estén por <i>debajo</i>.</html>"),
-            BorderLayout.NORTH)
+        panel.add(JLabel(I18n.t("order.header")), BorderLayout.NORTH)
         panel.add(scroll, BorderLayout.CENTER)
         panel.add(buttons, BorderLayout.EAST)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, "Ordenar privilegios",
+        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("order.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 
@@ -75,7 +73,7 @@ object PrivilegeOrderDialog {
             model[i].level = i * 10
         }
         ctx.store.fireChanged()
-        ctx.api.logging().logToOutput("AuthZ Matrix: privilegios reordenados (${model.size} roles).")
+        ctx.api.logging().logToOutput(I18n.t("order.log", model.size))
     }
 
     private class PersonaRenderer : DefaultListCellRenderer() {
@@ -84,7 +82,7 @@ object PrivilegeOrderDialog {
         ): Component {
             val c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
             if (value is Persona) {
-                val tag = if (value.anonymous) " (anónimo)" else Jwt.parse(value.token)?.owner?.let { " · $it" } ?: ""
+                val tag = if (value.anonymous) I18n.t("order.anon") else Jwt.parse(value.token)?.owner?.let { " · $it" } ?: ""
                 text = "${index + 1}.  ${value.name}$tag"
             }
             return c

@@ -21,6 +21,7 @@ A Burp Suite extension for **broken access control** and **privilege escalation*
 | **IDOR / param tampering** | Numeric + UUID ids, cross-persona replay |
 | **Token auto-refresh** | Swaps token from traffic (same `sub`) or re-logs in via a saved request |
 | **Export** | CSV / HTML matrix with verdict colours |
+| **Bilingual UI** | Loads in English by default; switch to Spanish from the toolbar (remembered across restarts) |
 
 ---
 
@@ -48,7 +49,7 @@ Requires JDK 17+. Uses the bundled Gradle wrapper — no Gradle install needed.
 ./gradlew shadowJar
 ```
 
-Output: `build/libs/authz-matrix-0.1.0.jar`  
+Output: `build/libs/rolebreaker-0.1.0.jar`  
 (fat-jar; bundles Kotlin stdlib + org.json — Montoya API is provided by Burp at runtime)
 
 Run the test suite (55 tests — JWT, verdict classification, IDOR, findings, privilege ranking):
@@ -63,10 +64,14 @@ Run the test suite (55 tests — JWT, verdict classification, IDOR, findings, pr
 
 1. **Extensions → Add**
 2. Extension type: **Java**
-3. Select `build/libs/authz-matrix-0.1.0.jar`
+3. Select `build/libs/rolebreaker-0.1.0.jar`
 4. An **AuthZ Matrix (JWT)** tab appears.
 
 After a rebuild: click **Reload** on the extension row — no need to re-add.
+
+### Language
+
+The UI loads in **English** by default. Use the **Language** selector on the far right of the toolbar to switch to **Español**; the whole tab re-renders instantly and your choice is remembered across Burp restarts.
 
 ---
 

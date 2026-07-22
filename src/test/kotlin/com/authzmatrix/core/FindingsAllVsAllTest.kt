@@ -22,7 +22,7 @@ class FindingsAllVsAllTest {
         row.results[b.id] = AccessResult(b.id, 200, 100, Verdict.ALLOWED, null, bodyHash = 777)
 
         val f = FindingsAnalyzer.analyze(listOf(row), emptyList(), store)
-        assertTrue(f.any { it.type == "Respuesta idéntica entre roles" })
+        assertTrue(f.any { it.type == I18n.t("find.identical") })
     }
 
     @Test fun lowerPrivAccessFlaggedEvenWithoutDenied() {
@@ -32,7 +32,7 @@ class FindingsAllVsAllTest {
         row.results[user.id] = AccessResult(user.id, 200, 100, Verdict.ALLOWED, null)
 
         val f = FindingsAnalyzer.analyze(listOf(row), emptyList(), store)
-        assertTrue(f.any { it.type == "Rol de menor privilegio con acceso" })
+        assertTrue(f.any { it.type == I18n.t("find.lowerPriv") })
     }
 
     @Test fun publicResponseEqualToAnonNotFlagged() {
@@ -44,6 +44,6 @@ class FindingsAllVsAllTest {
         row.results[anon.id] = AccessResult(anon.id, 200, 50, Verdict.ALLOWED, null, bodyHash = 9)
 
         val f = FindingsAnalyzer.analyze(listOf(row), emptyList(), store)
-        assertFalse(f.any { it.type == "Respuesta idéntica entre roles" })
+        assertFalse(f.any { it.type == I18n.t("find.identical") })
     }
 }

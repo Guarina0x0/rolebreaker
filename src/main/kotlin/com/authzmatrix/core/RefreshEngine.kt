@@ -17,7 +17,7 @@ class RefreshEngine(private val api: MontoyaApi) {
         val resp = try {
             api.http().sendRequest(req).response()
         } catch (e: Exception) {
-            api.logging().logToError("AuthZ Matrix: refresh de '${p.name}' falló: ${e.message}")
+            api.logging().logToError("RoleBreaker: refresh of '${p.name}' failed: ${e.message}")
             return null
         } ?: return null
         return extract(resp, p.refreshTokenField)

@@ -30,7 +30,7 @@ class HistoryScanner(
             }
         }
         api.logging().logToOutput(
-            "AuthZ Matrix: history scan (últimos ${withinMinutes}m, $scanned items) → $found token(s) nuevos")
+            "RoleBreaker: history scan (last ${withinMinutes}m, $scanned items) → $found new token(s)")
         found
     }
 

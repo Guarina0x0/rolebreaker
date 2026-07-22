@@ -57,11 +57,11 @@ class ReplayEngine(
             // (that refresh couldn't renew), is skipped rather than sent.
             if (!p.anonymous) {
                 if (p.token.isBlank()) {
-                    api.logging().logToOutput("AuthZ Matrix: '${p.name}' sin token — omitida (no se envía sin JWT)")
+                    api.logging().logToOutput("RoleBreaker: '${p.name}' has no token — skipped (never sent without a JWT)")
                     continue
                 }
                 if (com.authzmatrix.core.Jwt.parse(p.token)?.isExpired() == true) {
-                    api.logging().logToOutput("AuthZ Matrix: '${p.name}' con token caducado — omitida (no se envía JWT expirado)")
+                    api.logging().logToOutput("RoleBreaker: '${p.name}' has an expired token — skipped (never sends an expired JWT)")
                     continue
                 }
             }

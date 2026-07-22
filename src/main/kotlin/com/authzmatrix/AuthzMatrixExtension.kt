@@ -3,6 +3,7 @@ package com.authzmatrix
 import burp.api.montoya.BurpExtension
 import burp.api.montoya.MontoyaApi
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.I18n
 import com.authzmatrix.handler.AuthzContextMenu
 import com.authzmatrix.handler.ProxyHttpHandler
 import com.authzmatrix.ui.MainTab
@@ -13,19 +14,16 @@ import com.authzmatrix.ui.MainTab
 class AuthzMatrixExtension : BurpExtension {
 
     override fun initialize(api: MontoyaApi) {
-        api.extension().setName("AuthZ Matrix (JWT)")
+        api.extension().setName("RoleBreaker")
 
         val ctx = AppContext(api)
         val tab = MainTab(ctx)
 
-        api.userInterface().registerSuiteTab("AuthZ Matrix", tab.component())
+        api.userInterface().registerSuiteTab("RoleBreaker", tab.component())
         api.http().registerHttpHandler(ProxyHttpHandler(ctx))
         api.userInterface().registerContextMenuItemsProvider(AuthzContextMenu(ctx))
         api.extension().registerUnloadingHandler { ctx.shutdown() }
 
-        api.logging().logToOutput(
-            "AuthZ Matrix loaded. Configure personas, then right-click requests " +
-                "or enable Auto mode to build the access matrix.",
-        )
+        api.logging().logToOutput(I18n.t("ext.load"))
     }
 }

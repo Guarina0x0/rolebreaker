@@ -4,6 +4,7 @@ import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.I18n
 import java.awt.Component
 import javax.swing.JMenuItem
 
@@ -17,36 +18,34 @@ class AuthzContextMenu(private val ctx: AppContext) : ContextMenuItemsProvider {
         val requests = collect(event)
         if (requests.isEmpty()) return emptyList()
 
-        val autoLower = JMenuItem("AuthZ Matrix: probar con menor privilegio (auto)")
+        val autoLower = JMenuItem(I18n.t("ctx.lowerPriv"))
         autoLower.addActionListener {
             com.authzmatrix.ui.AutoLowerPrivTester.run(ctx, requests)
         }
 
-        val asRole = JMenuItem("AuthZ Matrix: probar esta acción como… (elegir roles)")
+        val asRole = JMenuItem(I18n.t("ctx.asRole"))
         asRole.addActionListener {
             com.authzmatrix.ui.RoleTestDialog.open(ctx, requests)
         }
 
-        val allText = if (requests.size > 1)
-            "AuthZ Matrix: test ${requests.size} peticiones (todas las personas)"
-        else "AuthZ Matrix: test (todas las personas)"
+        val allText = if (requests.size > 1) I18n.t("ctx.testAllN", requests.size) else I18n.t("ctx.testAll")
         val item = JMenuItem(allText)
         item.addActionListener {
             requests.forEach { ctx.submitTest(it) }
-            ctx.api.logging().logToOutput("AuthZ Matrix: queued ${requests.size} request(s)")
+            ctx.api.logging().logToOutput("RoleBreaker: queued ${requests.size} request(s)")
         }
 
-        val idor = JMenuItem("AuthZ Matrix: IDOR / param tampering…")
+        val idor = JMenuItem(I18n.t("ctx.idor"))
         idor.addActionListener {
             com.authzmatrix.ui.IdorDialog.open(ctx, requests.first())
         }
 
-        val jwtAttacks = JMenuItem("AuthZ Matrix: JWT attacks (none/strip/escala)…")
+        val jwtAttacks = JMenuItem(I18n.t("ctx.jwtAttacks"))
         jwtAttacks.addActionListener {
             com.authzmatrix.ui.JwtAttackDialog.open(ctx, requests.first())
         }
 
-        val asRefresh = JMenuItem("AuthZ Matrix: usar como refresh de una persona…")
+        val asRefresh = JMenuItem(I18n.t("ctx.asRefresh"))
         asRefresh.addActionListener {
             com.authzmatrix.ui.RefreshAssignDialog.open(ctx, requests.first())
         }

@@ -1,1 +1,1 @@
-rootProject.name = "authz-matrix"
+rootProject.name = "rolebreaker"

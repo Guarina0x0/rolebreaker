@@ -14,8 +14,8 @@ import com.authzmatrix.model.Verdict
 object FindingsAnalyzer {
 
     /** Row-label marker set by the auto lower-privilege test; every tested role is, by construction,
-     *  less privileged than the request's own identity. */
-    const val LOWER_PRIV_MARKER = "[menor-priv]"
+     *  less privileged than the request's own identity. Language-neutral so the check is stable. */
+    const val LOWER_PRIV_MARKER = "[lower-priv]"
 
     private fun gotIn(v: Verdict) = v == Verdict.ALLOWED || v == Verdict.SAME_AS_BASELINE
 
@@ -30,8 +30,8 @@ object FindingsAnalyzer {
 
             // 1) Anonymous access — unauthenticated identity got in.
             accessed.filter { byId[it.personaId]?.anonymous == true }.forEach { r ->
-                out += Finding(Severity.CRITICAL, "Acceso anónimo",
-                    "Sin token se accede a ${row.url} (HTTP ${r.statusCode})", r.requestResponse, row, r)
+                out += Finding(Severity.CRITICAL, I18n.t("find.anonAccess"),
+                    I18n.t("find.anonAccess.sum", row.url, r.statusCode), r.requestResponse, row, r)
             }
 
             val accessedRoles = accessed.filter { byId[it.personaId]?.anonymous != true }
@@ -43,9 +43,9 @@ object FindingsAnalyzer {
                 isIdor -> {
                     // 2) Horizontal access — a role reached a resource identified by another id.
                     accessedRoles.forEach { r ->
-                        val name = byId[r.personaId]?.name ?: "rol"
-                        out += Finding(Severity.HIGH, "IDOR / acceso horizontal",
-                            "«$name» accede a recurso ajeno: ${row.label} (HTTP ${r.statusCode})",
+                        val name = byId[r.personaId]?.name ?: I18n.t("role.fallback")
+                        out += Finding(Severity.HIGH, I18n.t("find.idor"),
+                            I18n.t("find.idor.sum", name, row.label, r.statusCode),
                             r.requestResponse, row, r)
                     }
                 }
@@ -53,10 +53,10 @@ object FindingsAnalyzer {
                     // 2b) A role known to be LESS privileged than the request's identity got in —
                     //     a finding even if no role was denied (they all succeeded).
                     accessedRoles.forEach { r ->
-                        val name = byId[r.personaId]?.name ?: "rol"
+                        val name = byId[r.personaId]?.name ?: I18n.t("role.fallback")
                         out += Finding(EndpointRisk.escalate(Severity.HIGH, endpointSev),
-                            "Rol de menor privilegio con acceso",
-                            "«$name» (menor privilegio) accede a ${row.method} ${row.url} (HTTP ${r.statusCode})",
+                            I18n.t("find.lowerPriv"),
+                            I18n.t("find.lowerPriv.sum", name, row.method, row.url, r.statusCode),
                             r.requestResponse, row, r)
                     }
                 }
@@ -65,8 +65,8 @@ object FindingsAnalyzer {
                     val inNames = accessedRoles.mapNotNull { byId[it.personaId]?.name }.joinToString(", ")
                     val outNames = denied.mapNotNull { byId[it.personaId]?.name }.joinToString(", ")
                     val evidence = accessedRoles.first()
-                    out += Finding(EndpointRisk.escalate(Severity.MEDIUM, endpointSev), "Acceso diferencial",
-                        "${row.method} ${row.url}: acceden [$inNames] · deniegan [$outNames]",
+                    out += Finding(EndpointRisk.escalate(Severity.MEDIUM, endpointSev), I18n.t("find.differential"),
+                        I18n.t("find.differential.sum", row.method, row.url, inNames, outNames),
                         evidence.requestResponse, row, evidence)
                 }
             }
@@ -82,16 +82,16 @@ object FindingsAnalyzer {
                 .filter { it.value.size >= 2 && it.key != anonKey }
                 .forEach { (_, group) ->
                     val names = group.mapNotNull { byId[it.personaId]?.name }.joinToString(", ")
-                    out += Finding(EndpointRisk.escalate(Severity.MEDIUM, endpointSev), "Respuesta idéntica entre roles",
-                        "${row.method} ${row.url}: [$names] reciben la MISMA respuesta 2xx — posible acceso horizontal / recurso no segregado",
+                    out += Finding(EndpointRisk.escalate(Severity.MEDIUM, endpointSev), I18n.t("find.identical"),
+                        I18n.t("find.identical.sum", row.method, row.url, names),
                         group.first().requestResponse, row, group.first())
                 }
         }
 
         // 4) Forged JWT accepted — broken signature verification.
         entries.filter { it.what.startsWith("🔴 JWT") && it.verdict == Verdict.ALLOWED }.forEach { e ->
-            out += Finding(Severity.CRITICAL, "JWT forjado aceptado",
-                "${e.what} aceptado en ${e.method} ${e.url} (HTTP ${e.statusCode})", e.requestResponse)
+            out += Finding(Severity.CRITICAL, I18n.t("find.forged"),
+                I18n.t("find.forged.sum", e.what, e.method, e.url, e.statusCode), e.requestResponse)
         }
 
         return out.sortedBy { it.severity.ordinal }

@@ -1,5 +1,6 @@
 package com.authzmatrix.ui
 
+import com.authzmatrix.core.I18n
 import com.authzmatrix.core.Jwt
 import com.authzmatrix.core.PersonaStore
 import com.authzmatrix.model.Persona
@@ -8,15 +9,18 @@ import javax.swing.table.AbstractTableModel
 
 class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() {
 
-    private val cols = arrayOf("On", "Name", "Anon", "Location", "Header/Cookie", "Token", "Nivel")
+    private val colKeys = arrayOf("col.on", "col.name", "col.anon", "col.location", "col.headerCookie", "col.token", "col.level")
 
     fun personaAt(row: Int): Persona? = store.personas.getOrNull(row)
 
     fun refresh() = fireTableDataChanged()
 
+    /** Re-read headers (e.g. after a language change). */
+    fun structureChanged() = fireTableStructureChanged()
+
     override fun getRowCount() = store.personas.size
-    override fun getColumnCount() = cols.size
-    override fun getColumnName(c: Int) = cols[c]
+    override fun getColumnCount() = colKeys.size
+    override fun getColumnName(c: Int) = I18n.t(colKeys[c])
 
     override fun getColumnClass(c: Int): Class<*> = when (c) {
         0, 2 -> java.lang.Boolean::class.java
@@ -63,15 +67,15 @@ class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() 
     }
 
     private fun tokenSummary(p: Persona): String {
-        if (p.anonymous) return "(anonymous)"
-        if (p.token.isBlank()) return "(no token)"
+        if (p.anonymous) return I18n.t("persona.anon")
+        if (p.token.isBlank()) return I18n.t("persona.noToken")
         val info = Jwt.parse(p.token)
         val flag = when {
-            info == null -> "opaque token"
-            info.isExpired() -> "⚠ EXPIRED · ${info.summary()}"
+            info == null -> I18n.t("persona.opaque")
+            info.isExpired() -> "${I18n.t("persona.expired")} · ${info.summary()}"
             else -> info.summary()
         }
-        val refresh = if (p.hasRefresh) "  ·  ⟳refresh" else ""
+        val refresh = if (p.hasRefresh) "  ·  ${I18n.t("persona.refresh")}" else ""
         return "…${p.token.takeLast(8)}  ·  $flag$refresh"
     }
 }

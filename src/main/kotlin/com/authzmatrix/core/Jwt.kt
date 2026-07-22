@@ -43,15 +43,15 @@ class JwtInfo(
         val notes = mutableListOf<String>()
         val a = alg?.lowercase()
         when {
-            a == null -> notes += "sin alg"
-            a == "none" -> notes += "⚠ alg:none (sin firma)"
-            a.startsWith("hs") -> notes += "HS simétrico (forjable si secreto débil)"
+            a == null -> notes += I18n.t("jwt.noAlg")
+            a == "none" -> notes += I18n.t("jwt.algNone")
+            a.startsWith("hs") -> notes += I18n.t("jwt.hsSymmetric")
             a.startsWith("rs") || a.startsWith("es") || a.startsWith("ps") -> notes += a.uppercase()
             else -> notes += a.uppercase()
         }
-        if (signature.isEmpty() && a != "none") notes += "⚠ sin firma"
-        if (exp == null) notes += "sin exp"
-        else if (isExpired()) notes += "⚠ EXPIRADO"
+        if (signature.isEmpty() && a != "none") notes += I18n.t("jwt.noSig")
+        if (exp == null) notes += I18n.t("jwt.noExp")
+        else if (isExpired()) notes += I18n.t("jwt.expired")
         return notes.joinToString("; ")
     }
 

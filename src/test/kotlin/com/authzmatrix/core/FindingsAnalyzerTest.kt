@@ -25,7 +25,7 @@ class FindingsAnalyzerTest {
         row.results[anon.id] = AccessResult(anon.id, 200, 100, Verdict.ALLOWED, null)
 
         val f = FindingsAnalyzer.analyze(listOf(row), emptyList(), store)
-        assertTrue(f.any { it.type == "Acceso anónimo" && it.severity == Severity.CRITICAL })
+        assertTrue(f.any { it.type == I18n.t("find.anonAccess") && it.severity == Severity.CRITICAL })
     }
 
     @Test fun differentialAccessFlagged() {
@@ -37,7 +37,7 @@ class FindingsAnalyzerTest {
         row.results[user.id] = AccessResult(user.id, 403, 50, Verdict.DENIED, null)
 
         val f = FindingsAnalyzer.analyze(listOf(row), emptyList(), store)
-        assertTrue(f.any { it.type == "Acceso diferencial" })
+        assertTrue(f.any { it.type == I18n.t("find.differential") })
     }
 
     @Test fun idorVariantFlaggedAsHorizontal() {
@@ -47,7 +47,7 @@ class FindingsAnalyzerTest {
         row.results[user.id] = AccessResult(user.id, 200, 100, Verdict.ALLOWED, null)
 
         val f = FindingsAnalyzer.analyze(listOf(row), emptyList(), store)
-        assertTrue(f.any { it.type == "IDOR / acceso horizontal" })
+        assertTrue(f.any { it.type == I18n.t("find.idor") })
     }
 
     @Test fun forgedJwtAcceptedFromActivity() {
@@ -55,6 +55,6 @@ class FindingsAnalyzerTest {
         val e = ActivityEntry("00:00:00", "🔴 JWT:none", "GET", "http://h/x", 200, 100, Verdict.ALLOWED, null)
 
         val f = FindingsAnalyzer.analyze(emptyList(), listOf(e), store)
-        assertTrue(f.any { it.type == "JWT forjado aceptado" && it.severity == Severity.CRITICAL })
+        assertTrue(f.any { it.type == I18n.t("find.forged") && it.severity == Severity.CRITICAL })
     }
 }

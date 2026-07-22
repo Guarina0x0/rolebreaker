@@ -2,6 +2,7 @@ package com.authzmatrix.ui
 
 import burp.api.montoya.http.message.requests.HttpRequest
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.I18n
 import com.authzmatrix.core.Jwt
 import com.authzmatrix.model.Persona
 import java.awt.GridBagConstraints
@@ -29,14 +30,14 @@ object RefreshAssignDialog {
     fun open(ctx: AppContext, request: HttpRequest) {
         val personas = ctx.store.personas.filter { !it.anonymous }
         if (personas.isEmpty()) {
-            JOptionPane.showMessageDialog(null, "No hay personas. Escanea el HTTP history primero.",
-                "AuthZ Matrix", JOptionPane.WARNING_MESSAGE)
+            JOptionPane.showMessageDialog(null, I18n.t("refresh.noPersonas"),
+                I18n.t("dlg.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
 
         val combo = JComboBox(personas.map { PItem(it) }.toTypedArray())
         val field = JTextField(18)
-        val testNow = JCheckBox("Probar ahora (re-login inmediato)", true)
+        val testNow = JCheckBox(I18n.t("refresh.testNow"), true)
 
         val panel = JPanel(GridBagLayout())
         val c = GridBagConstraints().apply {
@@ -47,15 +48,15 @@ object RefreshAssignDialog {
             c.gridx = 0; c.gridy = r; c.weightx = 0.0; panel.add(JLabel(label), c)
             c.gridx = 1; c.gridy = r; c.weightx = 1.0; panel.add(comp, c); r++
         }
-        row("Petición:", JLabel("${request.method()} ${request.pathWithoutQuery()}"))
-        row("Asignar a persona:", combo)
-        row("Campo JSON del token:", field)
+        row(I18n.t("refresh.request"), JLabel("${request.method()} ${request.pathWithoutQuery()}"))
+        row(I18n.t("refresh.assignTo"), combo)
+        row(I18n.t("refresh.jsonField"), field)
         c.gridx = 0; c.gridy = r++; c.gridwidth = 2
-        panel.add(JLabel("<html><i>Vacío = coge el primer JWT de la respuesta. Ej: <code>data.access_token</code></i></html>"), c)
+        panel.add(JLabel(I18n.t("refresh.hint")), c)
         c.gridwidth = 1
         c.gridx = 1; c.gridy = r++; panel.add(testNow, c)
 
-        val ok = JOptionPane.showConfirmDialog(null, panel, "Refresh / re-login de persona",
+        val ok = JOptionPane.showConfirmDialog(null, panel, I18n.t("refresh.dialogTitle"),
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
         if (ok != JOptionPane.OK_OPTION) return
 
@@ -65,25 +66,24 @@ object RefreshAssignDialog {
         ctx.store.fireChanged() // persist
 
         if (!testNow.isSelected) {
-            ctx.api.logging().logToOutput("AuthZ Matrix: refresh asignado a '${p.name}'.")
+            ctx.api.logging().logToOutput(I18n.t("refresh.assigned", p.name))
             return
         }
         Thread({
             val tok = ctx.refreshEngine.refresh(p)
             SwingUtilities.invokeLater {
                 if (tok == null) {
-                    JOptionPane.showMessageDialog(null, "No se obtuvo token de la respuesta.\n" +
-                        "Revisa el campo JSON o que la respuesta contenga un JWT.", "AuthZ Matrix",
+                    JOptionPane.showMessageDialog(null, I18n.t("refresh.noToken"), I18n.t("dlg.title"),
                         JOptionPane.WARNING_MESSAGE)
                 } else {
                     p.token = tok
                     Jwt.parse(tok)?.sub?.let { p.ownerSub = it }
-                    ctx.store.capture(tok, "re-login de ${p.name}")
+                    ctx.store.capture(tok, I18n.t("refresh.reloginSrc", p.name))
                     val info = Jwt.parse(tok)
-                    JOptionPane.showMessageDialog(null, "Re-login OK.\n${info?.summary() ?: "token opaco"}",
-                        "AuthZ Matrix", JOptionPane.INFORMATION_MESSAGE)
+                    JOptionPane.showMessageDialog(null, I18n.t("refresh.ok", info?.summary() ?: I18n.t("refresh.opaque")),
+                        I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
                 }
             }
-        }, "authz-refresh-test").start()
+        }, "rolebreaker-refresh-test").start()
     }
 }

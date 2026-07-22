@@ -2,6 +2,7 @@ package com.authzmatrix.ui
 
 import burp.api.montoya.ui.editor.EditorOptions
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.I18n
 import com.authzmatrix.model.Persona
 import com.authzmatrix.model.TokenLocation
 import java.awt.BorderLayout
@@ -55,11 +56,11 @@ class MainTab(private val ctx: AppContext) {
     private val root = JPanel(BorderLayout())
 
     init {
-        buildToolbar()
-        buildCenter()
-        wire()
-        catalogModel.refresh()
-        widenMatrix()
+        wireListeners()
+        buildUi()
+
+        // Rebuild the whole tab when the language changes so every label/header updates.
+        I18n.onChange { SwingUtilities.invokeLater { buildUi() } }
 
         ctx.rowSink = { row ->
             SwingUtilities.invokeLater {
@@ -87,6 +88,23 @@ class MainTab(private val ctx: AppContext) {
 
     fun component(): Component = root
 
+    /** (Re)build the whole tab. Called at startup and whenever the language changes. */
+    private fun buildUi() {
+        root.removeAll()
+        // Re-read column headers in the new language.
+        matrixModel.rebuildColumns()
+        personaModel.structureChanged()
+        activityModel.structureChanged()
+        findingsModel.structureChanged()
+        catalogModel.structureChanged()
+        buildToolbar()
+        buildCenter()
+        catalogModel.refresh()
+        widenMatrix()
+        root.revalidate()
+        root.repaint()
+    }
+
     // ---- toolbar --------------------------------------------------------------
 
     private fun buildToolbar() {
@@ -94,10 +112,10 @@ class MainTab(private val ctx: AppContext) {
         bar.isFloatable = false
         bar.isRollover = true
 
-        val auto = JCheckBox("Auto (todas las personas)", ctx.autoMode.get())
-        auto.toolTipText = "Replay de cada request in-scope contra todas las personas"
-        val lowerCont = JCheckBox("Continuo ↓priv (fondo)", ctx.autoLowerMode.get())
-        lowerCont.toolTipText = "Navega como admin; cada request nueva se relanza en background con los roles de menor privilegio"
+        val auto = JCheckBox(I18n.t("tb.autoAll"), ctx.autoMode.get())
+        auto.toolTipText = I18n.t("tb.autoAll.tip")
+        val lowerCont = JCheckBox(I18n.t("tb.lowerCont"), ctx.autoLowerMode.get())
+        lowerCont.toolTipText = I18n.t("tb.lowerCont.tip")
         // Mutually exclusive: enabling one disables the other (avoids double-testing each request).
         auto.addActionListener {
             ctx.autoMode.set(auto.isSelected)
@@ -107,35 +125,57 @@ class MainTab(private val ctx: AppContext) {
             ctx.autoLowerMode.set(lowerCont.isSelected)
             if (lowerCont.isSelected) { auto.isSelected = false; ctx.autoMode.set(false); ctx.resetAutoSeen() }
         }
-        val capture = JCheckBox("Capturar JWTs del tráfico", ctx.capture.enabled)
+        val capture = JCheckBox(I18n.t("tb.capture"), ctx.capture.enabled)
         capture.addActionListener { ctx.capture.enabled = capture.isSelected }
 
-        val clearResults = JButton("Limpiar matriz")
+        val clearResults = JButton(I18n.t("tb.clearMatrix"))
         clearResults.addActionListener { matrixModel.clear() }
-        val clearActivity = JButton("Limpiar actividad")
+        val clearActivity = JButton(I18n.t("tb.clearActivity"))
         clearActivity.addActionListener { activityModel.clear() }
-        val exportCsv = JButton("Export CSV")
+        val exportCsv = JButton(I18n.t("tb.exportCsv"))
         exportCsv.addActionListener { export("csv") }
-        val exportHtml = JButton("Export HTML")
+        val exportHtml = JButton(I18n.t("tb.exportHtml"))
         exportHtml.addActionListener { export("html") }
 
-        val sweep = JButton("⚡ Auto sweep")
-        sweep.toolTipText = "Un clic: escanea el historial reciente, crea y ordena roles, y prueba todo con los inferiores"
+        val sweep = JButton(I18n.t("tb.sweep"))
+        sweep.toolTipText = I18n.t("tb.sweep.tip")
         sweep.addActionListener { autoSweep() }
 
-        // Grouped: Auto · Modo · Vista · Export · PwnDoc
-        bar.add(JLabel(" Auto: "))
+        // Grouped: Auto · Mode · View · Export · Language
+        bar.add(JLabel(I18n.t("tb.auto")))
         bar.add(sweep)
         bar.addSeparator()
-        bar.add(JLabel(" Modo: "))
+        bar.add(JLabel(I18n.t("tb.mode")))
         bar.add(auto); bar.add(lowerCont); bar.add(capture)
         bar.addSeparator()
-        bar.add(JLabel(" Vista: "))
+        bar.add(JLabel(I18n.t("tb.view")))
         bar.add(clearResults); bar.add(clearActivity)
         bar.addSeparator()
-        bar.add(JLabel(" Export: "))
+        bar.add(JLabel(I18n.t("tb.export")))
         bar.add(exportCsv); bar.add(exportHtml)
+        bar.addSeparator()
+        bar.add(JLabel(I18n.t("tb.lang")))
+        bar.add(buildLangCombo())
         root.add(bar, BorderLayout.NORTH)
+    }
+
+    private fun buildLangCombo(): JComboBox<LangItem> {
+        val items = arrayOf(LangItem(I18n.Lang.EN, "English"), LangItem(I18n.Lang.ES, "Español"))
+        val combo = JComboBox(items)
+        combo.selectedItem = items.first { it.lang == I18n.lang }
+        combo.maximumSize = combo.preferredSize
+        combo.addActionListener {
+            val sel = (combo.selectedItem as? LangItem)?.lang ?: return@addActionListener
+            if (sel != I18n.lang) {
+                ctx.persistLang(sel)
+                I18n.setLang(sel) // triggers buildUi()
+            }
+        }
+        return combo
+    }
+
+    private class LangItem(val lang: I18n.Lang, val label: String) {
+        override fun toString() = label
     }
 
     // ---- center ---------------------------------------------------------------
@@ -147,8 +187,9 @@ class MainTab(private val ctx: AppContext) {
         matrixTable.cellSelectionEnabled = true
         matrixTable.autoResizeMode = JTable.AUTO_RESIZE_OFF
         matrixTable.rowHeight = 22
+        matrixTable.componentPopupMenu = buildMatrixMenu()
         val matrixScroll = JScrollPane(matrixTable)
-        matrixScroll.border = BorderFactory.createTitledBorder("Matriz de acceso (petición × persona)")
+        matrixScroll.border = BorderFactory.createTitledBorder(I18n.t("center.matrix"))
 
         val topSplit = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildConfigPanel(), matrixScroll)
         topSplit.resizeWeight = 0.45
@@ -170,13 +211,13 @@ class MainTab(private val ctx: AppContext) {
         val findingsScroll = JScrollPane(findingsTable)
 
         val bottomTabs = javax.swing.JTabbedPane()
-        bottomTabs.addTab("Actividad (en vivo)", activityScroll)
-        bottomTabs.addTab("⚠ Findings", findingsScroll)
+        bottomTabs.addTab(I18n.t("center.activity"), activityScroll)
+        bottomTabs.addTab(I18n.t("center.findings"), findingsScroll)
 
         val detail = JSplitPane(
             JSplitPane.HORIZONTAL_SPLIT,
-            titled(reqEditor.uiComponent(), "Request"),
-            titled(respEditor.uiComponent(), "Response"),
+            titled(reqEditor.uiComponent(), I18n.t("center.request")),
+            titled(respEditor.uiComponent(), I18n.t("center.response")),
         )
         detail.resizeWeight = 0.5
 
@@ -188,6 +229,16 @@ class MainTab(private val ctx: AppContext) {
         root.add(mainSplit, BorderLayout.CENTER)
     }
 
+    private fun buildMatrixMenu(): JPopupMenu {
+        val menu = JPopupMenu()
+        val toRepeater = JMenuItem(I18n.t("menu.toRepeater"))
+        toRepeater.addActionListener {
+            matrixModel.rowAt(matrixTable.selectedRow)?.baseline?.request()?.let { ctx.api.repeater().sendToRepeater(it) }
+        }
+        menu.add(toRepeater)
+        return menu
+    }
+
     private fun buildConfigPanel(): JComponent {
         // Personas.
         personaTable.selectionModel.selectionMode = ListSelectionModel.SINGLE_SELECTION
@@ -195,25 +246,25 @@ class MainTab(private val ctx: AppContext) {
         personaTable.autoResizeMode = JTable.AUTO_RESIZE_OFF
         applyWidths(personaTable, intArrayOf(34, 100, 44, 120, 110, 230, 55))
         val personaScroll = JScrollPane(personaTable)
-        personaScroll.border = BorderFactory.createTitledBorder("Personas (roles)")
+        personaScroll.border = BorderFactory.createTitledBorder(I18n.t("cfg.personas"))
         val personaBtns = JPanel(FlowLayout(FlowLayout.LEFT))
-        val add = JButton("Add"); add.addActionListener { ctx.store.addPersona(Persona(name = "role${ctx.store.personas.size + 1}")) }
-        val remove = JButton("Remove"); remove.addActionListener {
+        val add = JButton(I18n.t("btn.add")); add.addActionListener { ctx.store.addPersona(Persona(name = "role${ctx.store.personas.size + 1}")) }
+        val remove = JButton(I18n.t("btn.remove")); remove.addActionListener {
             personaModel.personaAt(personaTable.selectedRow)?.let { ctx.store.removePersona(it) }
         }
-        val refreshExpired = JButton("Refrescar caducados")
-        refreshExpired.toolTipText = "Re-login de las personas con token caducado que tengan refresh configurado"
+        val refreshExpired = JButton(I18n.t("btn.refreshExpired"))
+        refreshExpired.toolTipText = I18n.t("btn.refreshExpired.tip")
         refreshExpired.addActionListener { ctx.refreshAllExpired() }
-        val clearPersonas = JButton("Limpiar personas")
-        clearPersonas.toolTipText = "Borra TODAS las personas (incl. las guardadas de sesiones anteriores)"
+        val clearPersonas = JButton(I18n.t("btn.clearPersonas"))
+        clearPersonas.toolTipText = I18n.t("btn.clearPersonas.tip")
         clearPersonas.addActionListener {
-            if (JOptionPane.showConfirmDialog(root, "¿Borrar todas las personas?", "AuthZ Matrix",
+            if (JOptionPane.showConfirmDialog(root, I18n.t("msg.confirmClearPersonas"), I18n.t("dlg.title"),
                     JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                 ctx.store.clearPersonas()
             }
         }
-        val order = JButton("Ordenar privilegios…")
-        order.toolTipText = "Marca qué rol tiene más y cuál menos privilegio (para el test automático)"
+        val order = JButton(I18n.t("btn.order"))
+        order.toolTipText = I18n.t("btn.order.tip")
         order.addActionListener { PrivilegeOrderDialog.open(ctx) }
         personaBtns.add(add); personaBtns.add(remove); personaBtns.add(refreshExpired)
         personaBtns.add(clearPersonas); personaBtns.add(order)
@@ -226,14 +277,14 @@ class MainTab(private val ctx: AppContext) {
         catalogTable.autoResizeMode = JTable.AUTO_RESIZE_OFF
         applyWidths(catalogTable, intArrayOf(90, 150, 150, 60, 160, 230, 220))
         val catalogScroll = JScrollPane(catalogTable)
-        catalogScroll.border = BorderFactory.createTitledBorder("Identidades descubiertas (JWT, sin duplicados)")
+        catalogScroll.border = BorderFactory.createTitledBorder(I18n.t("cfg.catalog"))
         val catalogBtns = JPanel(FlowLayout(FlowLayout.LEFT))
-        val scan = JButton("Escanear HTTP history"); scan.addActionListener { scanHistory() }
-        val sync = JButton("Crear personas por rol"); sync.addActionListener { syncPersonas() }
-        val promote = JButton("Promover selección"); promote.addActionListener { promoteToken() }
-        val crack = JButton("Crackear secreto (HS)"); crack.addActionListener { crackSelected() }
-        crack.toolTipText = "Prueba secretos comunes contra un token HS256/384/512 (offline)"
-        val clearCat = JButton("Limpiar"); clearCat.addActionListener { ctx.store.clearCaptured() }
+        val scan = JButton(I18n.t("btn.scan")); scan.addActionListener { scanHistory() }
+        val sync = JButton(I18n.t("btn.sync")); sync.addActionListener { syncPersonas() }
+        val promote = JButton(I18n.t("btn.promote")); promote.addActionListener { promoteToken() }
+        val crack = JButton(I18n.t("btn.crack")); crack.addActionListener { crackSelected() }
+        crack.toolTipText = I18n.t("btn.crack.tip")
+        val clearCat = JButton(I18n.t("btn.clear")); clearCat.addActionListener { ctx.store.clearCaptured() }
         listOf(scan, sync, promote, crack, clearCat).forEach { catalogBtns.add(it) }
         val catalogBox = JPanel(BorderLayout())
         catalogBox.add(catalogScroll, BorderLayout.CENTER)
@@ -263,7 +314,8 @@ class MainTab(private val ctx: AppContext) {
 
     // ---- behaviour ------------------------------------------------------------
 
-    private fun wire() {
+    /** Selection listeners attach to the persistent table objects — registered once. */
+    private fun wireListeners() {
         matrixTable.selectionModel.addListSelectionListener { showMatrixCell() }
         matrixTable.columnModel.selectionModel.addListSelectionListener { showMatrixCell() }
         activityTable.selectionModel.addListSelectionListener {
@@ -272,13 +324,6 @@ class MainTab(private val ctx: AppContext) {
         findingsTable.selectionModel.addListSelectionListener {
             findingsModel.findingAt(findingsTable.selectedRow)?.requestResponse?.let { show(it) }
         }
-        val menu = JPopupMenu()
-        val toRepeater = JMenuItem("Send original to Repeater")
-        toRepeater.addActionListener {
-            matrixModel.rowAt(matrixTable.selectedRow)?.baseline?.request()?.let { ctx.api.repeater().sendToRepeater(it) }
-        }
-        menu.add(toRepeater)
-        matrixTable.componentPopupMenu = menu
     }
 
     private fun showMatrixCell() {
@@ -302,11 +347,7 @@ class MainTab(private val ctx: AppContext) {
     }
 
     private fun autoSweep() {
-        val input = JOptionPane.showInputDialog(root,
-            "Auto sweep — usa el historial de los últimos N minutos:\n" +
-                "escanea JWT activos, crea roles, ordena privilegios solo y prueba\n" +
-                "cada petición con los roles de MENOR privilegio.",
-            "20") ?: return
+        val input = JOptionPane.showInputDialog(root, I18n.t("sweep.prompt"), "20") ?: return
         val minutes = input.trim().toLongOrNull()?.coerceAtLeast(1) ?: 20L
         Thread({
             ctx.historyScanner.scan(minutes, true)
@@ -318,58 +359,50 @@ class MainTab(private val ctx: AppContext) {
                 catalogModel.refresh()
                 val roles = ctx.store.personas.filter { !it.anonymous }
                 if (roles.isEmpty()) {
-                    JOptionPane.showMessageDialog(root,
-                        "No se descubrieron roles con token activo en los últimos ${minutes}m.",
-                        "Auto sweep", JOptionPane.WARNING_MESSAGE)
+                    JOptionPane.showMessageDialog(root, I18n.t("sweep.noRoles", minutes),
+                        I18n.t("sweep.title"), JOptionPane.WARNING_MESSAGE)
                     return@invokeLater
                 }
                 if (reqs.isEmpty()) {
-                    JOptionPane.showMessageDialog(root,
-                        "No hay peticiones in-scope en los últimos ${minutes}m para probar.",
-                        "Auto sweep", JOptionPane.WARNING_MESSAGE)
+                    JOptionPane.showMessageDialog(root, I18n.t("sweep.noReqs", minutes),
+                        I18n.t("sweep.title"), JOptionPane.WARNING_MESSAGE)
                     return@invokeLater
                 }
                 com.authzmatrix.ui.AutoLowerPrivTester.run(ctx, reqs)
                 val order = ctx.store.personas.sortedBy { it.level }
                     .joinToString(" > ") { "${it.name}(${it.level})" }
-                JOptionPane.showMessageDialog(root,
-                    "Auto sweep lanzado sobre ${reqs.size} petición(es) de los últimos ${minutes}m.\n" +
-                        "Jerarquía detectada (más → menos priv): $order\n" +
-                        "Revisa la pestaña ⚠ Findings.",
-                    "Auto sweep", JOptionPane.INFORMATION_MESSAGE)
+                JOptionPane.showMessageDialog(root, I18n.t("sweep.launched", reqs.size, minutes, order),
+                    I18n.t("sweep.title"), JOptionPane.INFORMATION_MESSAGE)
             }
-        }, "authz-auto-sweep").start()
+        }, "rolebreaker-auto-sweep").start()
     }
 
     private fun scanHistory() {
-        val input = JOptionPane.showInputDialog(root,
-            "Escanear JWT del historial de los últimos N minutos (solo tokens activos):",
-            "60") ?: return
+        val input = JOptionPane.showInputDialog(root, I18n.t("scan.prompt"), "60") ?: return
         val minutes = input.trim().toLongOrNull()?.coerceAtLeast(1) ?: 60L
         Thread({
             val n = ctx.historyScanner.scan(minutes, true)
             val created = ctx.store.syncPersonasFromTokens()
             SwingUtilities.invokeLater {
                 catalogModel.refresh()
-                JOptionPane.showMessageDialog(root,
-                    "$n token(s) activo(s) nuevos (últimos ${minutes}m).\n$created persona(s) creada(s) por rol.",
-                    "AuthZ Matrix", JOptionPane.INFORMATION_MESSAGE)
+                JOptionPane.showMessageDialog(root, I18n.t("scan.result", n, minutes, created),
+                    I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
                 offerPrivilegeOrder()
             }
-        }, "authz-history-scan").start()
+        }, "rolebreaker-history-scan").start()
     }
 
     private fun syncPersonas() {
         val created = ctx.store.syncPersonasFromTokens()
-        JOptionPane.showMessageDialog(root, "$created persona(s) creada(s). Total: ${ctx.store.personas.size}.",
-            "AuthZ Matrix", JOptionPane.INFORMATION_MESSAGE)
+        JOptionPane.showMessageDialog(root, I18n.t("sync.result", created, ctx.store.personas.size),
+            I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
         offerPrivilegeOrder()
     }
 
     private fun offerPrivilegeOrder() {
         if (ctx.store.personas.size >= 2 &&
-            JOptionPane.showConfirmDialog(root, "¿Ordenar ahora los roles por privilegio (más → menos)?",
-                "AuthZ Matrix", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION
+            JOptionPane.showConfirmDialog(root, I18n.t("order.offer"),
+                I18n.t("dlg.title"), JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION
         ) {
             PrivilegeOrderDialog.open(ctx)
         }
@@ -384,42 +417,40 @@ class MainTab(private val ctx: AppContext) {
     private fun crackSelected() {
         val t = catalogModel.tokenAt(catalogTable.selectedRow)
         if (t == null) {
-            JOptionPane.showMessageDialog(root, "Selecciona un token del catálogo.", "Crackear",
+            JOptionPane.showMessageDialog(root, I18n.t("crack.selectToken"), I18n.t("crack.title"),
                 JOptionPane.WARNING_MESSAGE)
             return
         }
         if (!com.authzmatrix.core.JwtCracker.isHmac(t.info?.alg)) {
-            JOptionPane.showMessageDialog(root, "El crackeo de secreto solo aplica a tokens HS256/384/512 " +
-                "(este es alg=${t.info?.alg ?: "?"}).", "Crackear", JOptionPane.INFORMATION_MESSAGE)
+            JOptionPane.showMessageDialog(root, I18n.t("crack.onlyHmac", t.info?.alg ?: "?"),
+                I18n.t("crack.title"), JOptionPane.INFORMATION_MESSAGE)
             return
         }
         Thread({
             val hit = com.authzmatrix.core.JwtCracker.crack(t.token, com.authzmatrix.core.JwtCracker.COMMON_SECRETS)
-            SwingUtilities.invokeLater { reportCrack(t.token, hit, "lista común", offerWordlist = true) }
-        }, "authz-jwt-crack").start()
+            SwingUtilities.invokeLater { reportCrack(t.token, hit, I18n.t("crack.commonList"), offerWordlist = true) }
+        }, "rolebreaker-jwt-crack").start()
     }
 
     private fun reportCrack(token: String, hit: String?, source: String, offerWordlist: Boolean) {
         if (hit != null) {
-            ctx.api.logging().logToOutput("AuthZ Matrix: SECRETO HMAC DÉBIL encontrado ($source): '$hit'")
+            ctx.api.logging().logToOutput(I18n.t("crack.weakLog", source, hit))
             manualFindings += com.authzmatrix.model.Finding(
-                com.authzmatrix.model.Severity.CRITICAL, "Secreto HMAC débil",
-                "Secreto del token crackeado ($source): «$hit» → el JWT es forjable.", null,
+                com.authzmatrix.model.Severity.CRITICAL, I18n.t("finding.weakSecret.type"),
+                I18n.t("finding.weakSecret.summary", source, hit), null,
             )
             recomputeFindings()
-            JOptionPane.showMessageDialog(root,
-                "⚠ SECRETO DÉBIL: «$hit»\nEl token es forjable: puedes firmar cualquier claim con ese secreto.",
-                "Crackear — vulnerable", JOptionPane.WARNING_MESSAGE)
+            JOptionPane.showMessageDialog(root, I18n.t("crack.weakDialog", hit),
+                I18n.t("crack.weakTitle"), JOptionPane.WARNING_MESSAGE)
             return
         }
         if (!offerWordlist) {
-            JOptionPane.showMessageDialog(root, "No se crackeó con la $source.", "Crackear",
+            JOptionPane.showMessageDialog(root, I18n.t("crack.notCracked", source), I18n.t("crack.title"),
                 JOptionPane.INFORMATION_MESSAGE)
             return
         }
-        val loadCustom = JOptionPane.showConfirmDialog(root,
-            "No se crackeó con la $source. ¿Probar con una wordlist propia?",
-            "Crackear", JOptionPane.YES_NO_OPTION)
+        val loadCustom = JOptionPane.showConfirmDialog(root, I18n.t("crack.tryWordlist", source),
+            I18n.t("crack.title"), JOptionPane.YES_NO_OPTION)
         if (loadCustom != JOptionPane.YES_OPTION) return
         val fc = JFileChooser()
         if (fc.showOpenDialog(root) != JFileChooser.APPROVE_OPTION) return
@@ -429,26 +460,26 @@ class MainTab(private val ctx: AppContext) {
                 java.nio.file.Files.readAllLines(file.toPath()).map { it.trim() }.filter { it.isNotEmpty() }
             } catch (ex: Exception) {
                 SwingUtilities.invokeLater {
-                    JOptionPane.showMessageDialog(root, "No se pudo leer la wordlist: ${ex.message}", "Crackear",
+                    JOptionPane.showMessageDialog(root, I18n.t("crack.wordlistErr", ex.message ?: ""), I18n.t("crack.title"),
                         JOptionPane.ERROR_MESSAGE)
                 }
                 return@Thread
             }
             val hit2 = com.authzmatrix.core.JwtCracker.crack(token, words)
-            SwingUtilities.invokeLater { reportCrack(token, hit2, "wordlist (${words.size} palabras)", offerWordlist = false) }
-        }, "authz-jwt-crack-wl").start()
+            SwingUtilities.invokeLater { reportCrack(token, hit2, I18n.t("crack.wordlist", words.size), offerWordlist = false) }
+        }, "rolebreaker-jwt-crack-wl").start()
     }
 
     private fun export(kind: String) {
         val fc = JFileChooser()
-        fc.selectedFile = File("authz-matrix.$kind")
+        fc.selectedFile = File("rolebreaker-matrix.$kind")
         if (fc.showSaveDialog(root) != JFileChooser.APPROVE_OPTION) return
         val text = if (kind == "csv") matrixModel.exportCsv() else matrixModel.exportHtml()
         try {
             java.nio.file.Files.writeString(fc.selectedFile.toPath(), text)
-            ctx.api.logging().logToOutput("AuthZ Matrix: exportado ${fc.selectedFile}")
+            ctx.api.logging().logToOutput("RoleBreaker: exported ${fc.selectedFile}")
         } catch (ex: Exception) {
-            JOptionPane.showMessageDialog(root, "Error exportando: ${ex.message}", "Export", JOptionPane.ERROR_MESSAGE)
+            JOptionPane.showMessageDialog(root, I18n.t("export.error", ex.message ?: ""), "Export", JOptionPane.ERROR_MESSAGE)
         }
     }
 
