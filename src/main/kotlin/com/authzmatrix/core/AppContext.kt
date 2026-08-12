@@ -20,6 +20,9 @@ class AppContext(val api: MontoyaApi) {
     val historyScanner = HistoryScanner(api, capture, store)
     val refreshEngine = RefreshEngine(api)
 
+    /** Extra matrix right-click actions contributed by optional modules (empty on the public build). */
+    val matrixRowActions = java.util.concurrent.CopyOnWriteArrayList<MatrixRowAction>()
+
     /** UI installs this to receive a line per launched request. */
     @Volatile
     var activitySink: (com.authzmatrix.model.ActivityEntry) -> Unit = {}

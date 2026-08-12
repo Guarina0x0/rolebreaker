@@ -224,11 +224,30 @@ class MainTab(private val ctx: AppContext) {
 
     private fun buildMatrixMenu(): JPopupMenu {
         val menu = JPopupMenu()
-        val toRepeater = JMenuItem(I18n.t("menu.toRepeater"))
-        toRepeater.addActionListener {
-            matrixModel.rowAt(matrixTable.selectedRow)?.baseline?.request()?.let { ctx.api.repeater().sendToRepeater(it) }
-        }
-        menu.add(toRepeater)
+        // Rebuilt each time it opens so optional modules registered after startup (e.g. PwnDoc on
+        // the private build) still contribute their actions, and labels track the language.
+        menu.addPopupMenuListener(object : javax.swing.event.PopupMenuListener {
+            override fun popupMenuWillBecomeVisible(e: javax.swing.event.PopupMenuEvent) {
+                menu.removeAll()
+                val toRepeater = JMenuItem(I18n.t("menu.toRepeater"))
+                toRepeater.addActionListener {
+                    matrixModel.rowAt(matrixTable.selectedRow)?.baseline?.request()
+                        ?.let { ctx.api.repeater().sendToRepeater(it) }
+                }
+                menu.add(toRepeater)
+                for (action in ctx.matrixRowActions) {
+                    val item = JMenuItem(action.label())
+                    item.addActionListener {
+                        val row = matrixModel.rowAt(matrixTable.selectedRow) ?: return@addActionListener
+                        val result = matrixModel.resultAt(matrixTable.selectedRow, matrixTable.selectedColumn)
+                        action.run(row, result)
+                    }
+                    menu.add(item)
+                }
+            }
+            override fun popupMenuWillBecomeInvisible(e: javax.swing.event.PopupMenuEvent) {}
+            override fun popupMenuCanceled(e: javax.swing.event.PopupMenuEvent) {}
+        })
         return menu
     }
 

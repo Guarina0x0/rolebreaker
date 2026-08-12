@@ -27,6 +27,17 @@ interface DashboardModule {
     fun status(): ModuleStatus
 }
 
+/**
+ * An extra right-click action contributed to the access-matrix popup by an optional module (e.g.
+ * the private PwnDoc module registers "Send to PwnDoc"). The public build registers none, so the
+ * matrix menu is unchanged there. [run] receives the selected row and the selected cell's result
+ * (null when the baseline column is selected).
+ */
+class MatrixRowAction(
+    val label: () -> String,
+    val run: (com.authzmatrix.model.MatrixRow, com.authzmatrix.model.AccessResult?) -> Unit,
+)
+
 /** Visual tone for a stat/status line, mapped to a colour by the renderer. */
 enum class Tone { NEUTRAL, GOOD, WARN, BAD }
 
