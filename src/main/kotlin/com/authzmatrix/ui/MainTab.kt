@@ -153,30 +153,23 @@ class MainTab(private val ctx: AppContext) {
         bar.addSeparator()
         bar.add(JLabel(I18n.t("tb.export")))
         bar.add(exportCsv); bar.add(exportHtml)
-        bar.addSeparator()
-        bar.add(JLabel(I18n.t("tb.lang")))
-        bar.add(buildLangCombo())
         root.add(bar, BorderLayout.NORTH)
     }
 
-    private fun buildLangCombo(): JComboBox<LangItem> {
-        val items = arrayOf(LangItem(I18n.Lang.EN, "English"), LangItem(I18n.Lang.ES, "Español"))
-        val combo = JComboBox(items)
-        combo.selectedItem = items.first { it.lang == I18n.lang }
-        combo.maximumSize = combo.preferredSize
-        combo.addActionListener {
-            val sel = (combo.selectedItem as? LangItem)?.lang ?: return@addActionListener
-            if (sel != I18n.lang) {
-                ctx.persistLang(sel)
-                I18n.setLang(sel) // triggers buildUi()
-            }
-        }
-        return combo
-    }
+    // ---- status (for the Home dashboard) --------------------------------------
 
-    private class LangItem(val lang: I18n.Lang, val label: String) {
-        override fun toString() = label
-    }
+    /** Non-anonymous personas (i.e. real roles) configured. */
+    fun roleCount(): Int = ctx.store.personas.count { !it.anonymous }
+
+    /** Rows currently in the access matrix (endpoints under test). */
+    fun matrixRowCount(): Int = matrixModel.rowCount
+
+    /** All ranked findings currently shown. */
+    fun findingCount(): Int = findingsModel.all().size
+
+    /** How many of the findings are CRITICAL. */
+    fun criticalCount(): Int =
+        findingsModel.all().count { it.severity == com.authzmatrix.model.Severity.CRITICAL }
 
     // ---- center ---------------------------------------------------------------
 

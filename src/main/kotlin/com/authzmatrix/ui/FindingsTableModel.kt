@@ -20,6 +20,9 @@ class FindingsTableModel : AbstractTableModel() {
     fun findingAt(i: Int): Finding? = items.getOrNull(i)
     fun severityAt(i: Int): Severity? = items.getOrNull(i)?.severity
 
+    /** Snapshot of all findings (used by the Home dashboard for counts). */
+    fun all(): List<Finding> = items.toList()
+
     /** Re-read headers (e.g. after a language change). */
     fun structureChanged() = fireTableStructureChanged()
 

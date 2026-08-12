@@ -38,6 +38,17 @@ object I18n {
         "ext.name" to "RoleBreaker",
         "ext.load" to "RoleBreaker loaded. Configure personas, then right-click requests or enable Auto mode to build the access matrix.",
 
+        // dashboard shell
+        "mod.home" to "Home",
+        "mod.matrix" to "AuthZ Matrix",
+        "home.title" to "RoleBreaker Suite",
+        "home.subtitle" to "Overview of your modules and current findings.",
+        "home.open" to "Open →",
+        "home.roles" to "Roles",
+        "home.endpoints" to "Endpoints",
+        "home.findings" to "Findings",
+        "home.critical" to "Critical",
+
         // toolbar
         "tb.auto" to " Auto: ",
         "tb.sweep" to "⚡ Auto sweep",
@@ -263,6 +274,17 @@ object I18n {
     private val ES: Map<String, String> = mapOf(
         "ext.name" to "RoleBreaker",
         "ext.load" to "RoleBreaker cargado. Configura personas y luego haz clic derecho en las peticiones o activa el modo Auto para construir la matriz de acceso.",
+
+        // dashboard shell
+        "mod.home" to "Inicio",
+        "mod.matrix" to "Matriz AuthZ",
+        "home.title" to "RoleBreaker Suite",
+        "home.subtitle" to "Resumen de tus módulos y de los hallazgos actuales.",
+        "home.open" to "Abrir →",
+        "home.roles" to "Roles",
+        "home.endpoints" to "Endpoints",
+        "home.findings" to "Hallazgos",
+        "home.critical" to "Críticos",
 
         // toolbar
         "tb.auto" to " Auto: ",

@@ -6,7 +6,7 @@ import com.authzmatrix.core.AppContext
 import com.authzmatrix.core.I18n
 import com.authzmatrix.handler.AuthzContextMenu
 import com.authzmatrix.handler.ProxyHttpHandler
-import com.authzmatrix.ui.MainTab
+import com.authzmatrix.ui.dashboard.DashboardTab
 
 /**
  * Entry point. Burp discovers this class (implements BurpExtension) and calls initialize().
@@ -17,7 +17,7 @@ class AuthzMatrixExtension : BurpExtension {
         api.extension().setName("RoleBreaker")
 
         val ctx = AppContext(api)
-        val tab = MainTab(ctx)
+        val tab = DashboardTab(ctx)
 
         api.userInterface().registerSuiteTab("RoleBreaker", tab.component())
         api.http().registerHttpHandler(ProxyHttpHandler(ctx))
