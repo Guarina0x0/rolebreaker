@@ -41,6 +41,7 @@ object I18n {
         // dashboard shell
         "mod.home" to "Home",
         "mod.matrix" to "AuthZ Matrix",
+        "mod.payloads" to "Payloads",
         "home.title" to "RoleBreaker Suite",
         "home.subtitle" to "Overview of your modules and current findings.",
         "home.open" to "Open →",
@@ -48,6 +49,25 @@ object I18n {
         "home.endpoints" to "Endpoints",
         "home.findings" to "Findings",
         "home.critical" to "Critical",
+        "home.payloads" to "Payloads",
+        "home.categories" to "Categories",
+
+        // payloads module
+        "pl.categories" to "Categories",
+        "pl.all" to "All",
+        "pl.custom" to "Custom",
+        "pl.search" to "Filter payloads (value, note or category)…",
+        "pl.copy" to "Copy",
+        "pl.add" to "Add…",
+        "pl.remove" to "Remove",
+        "pl.copied" to "Copied: %s",
+        "pl.onlyCustom" to "Only custom payloads can be removed.",
+        "pl.addTitle" to "Add custom payload",
+        "pl.addValue" to "Payload:",
+        "pl.addNote" to "Note (optional):",
+        "col.category" to "Category",
+        "col.payload" to "Payload",
+        "col.note" to "Note",
 
         // toolbar
         "tb.auto" to " Auto: ",
@@ -278,6 +298,7 @@ object I18n {
         // dashboard shell
         "mod.home" to "Inicio",
         "mod.matrix" to "Matriz AuthZ",
+        "mod.payloads" to "Payloads",
         "home.title" to "RoleBreaker Suite",
         "home.subtitle" to "Resumen de tus módulos y de los hallazgos actuales.",
         "home.open" to "Abrir →",
@@ -285,6 +306,25 @@ object I18n {
         "home.endpoints" to "Endpoints",
         "home.findings" to "Hallazgos",
         "home.critical" to "Críticos",
+        "home.payloads" to "Payloads",
+        "home.categories" to "Categorías",
+
+        // payloads module
+        "pl.categories" to "Categorías",
+        "pl.all" to "Todas",
+        "pl.custom" to "Propios",
+        "pl.search" to "Filtrar payloads (valor, nota o categoría)…",
+        "pl.copy" to "Copiar",
+        "pl.add" to "Añadir…",
+        "pl.remove" to "Quitar",
+        "pl.copied" to "Copiado: %s",
+        "pl.onlyCustom" to "Solo se pueden quitar los payloads propios.",
+        "pl.addTitle" to "Añadir payload propio",
+        "pl.addValue" to "Payload:",
+        "pl.addNote" to "Nota (opcional):",
+        "col.category" to "Categoría",
+        "col.payload" to "Payload",
+        "col.note" to "Nota",
 
         // toolbar
         "tb.auto" to " Auto: ",

@@ -42,7 +42,7 @@ class DashboardTab(private val ctx: AppContext) {
 
     init {
         home = HomeModule(ctx, peers = { modules.filter { it.id != "home" } }, switchTo = ::select)
-        modules = listOf(home, MatrixModule(ctx)) + ModuleRegistry.extras(ctx)
+        modules = listOf(home, MatrixModule(ctx), PayloadsModule(ctx)) + ModuleRegistry.extras(ctx)
 
         cards.isOpaque = false
         for (m in modules) cards.add(m.component(), m.id)
