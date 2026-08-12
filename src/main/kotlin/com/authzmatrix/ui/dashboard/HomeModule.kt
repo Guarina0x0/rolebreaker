@@ -4,9 +4,8 @@ import com.authzmatrix.core.AppContext
 import com.authzmatrix.core.DashboardModule
 import com.authzmatrix.core.I18n
 import com.authzmatrix.core.ModuleStatus
-import com.authzmatrix.core.Tone
+import com.authzmatrix.core.StatChip
 import java.awt.BorderLayout
-import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -38,11 +37,16 @@ class HomeModule(
 
     private val root = JPanel(BorderLayout())
     private val cards = JPanel()
+    private val scroll: JScrollPane
 
     init {
         cards.layout = BoxLayout(cards, BoxLayout.Y_AXIS)
-        cards.border = BorderFactory.createEmptyBorder(12, 12, 12, 12)
-        root.add(JScrollPane(cards), BorderLayout.CENTER)
+        cards.isOpaque = false
+        cards.border = BorderFactory.createEmptyBorder(16, 18, 16, 18)
+        scroll = JScrollPane(cards)
+        scroll.border = null
+        scroll.verticalScrollBar.unitIncrement = 16
+        root.add(scroll, BorderLayout.CENTER)
 
         // Live-refresh cards on any data change; rebuild labels on language change too.
         ctx.store.onChange { SwingUtilities.invokeLater { refresh() } }
@@ -58,91 +62,86 @@ class HomeModule(
     /** Rebuild every card from the peers' current status. Safe to call repeatedly. */
     fun refresh() {
         cards.removeAll()
+
         val header = JLabel(I18n.t("home.title"))
-        header.font = header.font.deriveFont(Font.BOLD, header.font.size + 4f)
+        header.font = header.font.deriveFont(Font.BOLD, header.font.size + 7f)
+        header.foreground = DashTheme.text
         header.alignmentX = Component.LEFT_ALIGNMENT
         cards.add(header)
         cards.add(JLabel(I18n.t("home.subtitle")).apply {
-            foreground = MUTED; alignmentX = Component.LEFT_ALIGNMENT
+            foreground = DashTheme.muted; alignmentX = Component.LEFT_ALIGNMENT
         })
-        cards.add(Box.createVerticalStrut(10))
+        cards.add(Box.createVerticalStrut(14))
 
         for (m in peers()) {
             cards.add(card(m))
-            cards.add(Box.createVerticalStrut(10))
+            cards.add(Box.createVerticalStrut(12))
         }
+        cards.add(Box.createVerticalGlue())
         cards.revalidate()
         cards.repaint()
     }
 
     private fun card(m: DashboardModule): JComponent {
         val st = runCatching { m.status() }.getOrDefault(ModuleStatus())
-        val panel = JPanel(BorderLayout(0, 6))
+        // Anonymous subclass so the card never grows past its preferred height in the BoxLayout
+        // (this was the "cut off" bug: a fixed maximumSize captured before children were added).
+        val panel = object : JPanel(BorderLayout(0, 10)) {
+            override fun getMaximumSize() = Dimension(Int.MAX_VALUE, preferredSize.height)
+        }
+        panel.background = DashTheme.card
         panel.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(BORDER),
-            BorderFactory.createEmptyBorder(10, 12, 10, 12),
+            BorderFactory.createLineBorder(DashTheme.line),
+            BorderFactory.createEmptyBorder(14, 16, 14, 16),
         )
         panel.alignmentX = Component.LEFT_ALIGNMENT
-        panel.maximumSize = Dimension(Int.MAX_VALUE, panel.preferredSize.height)
 
-        // Title row: "🔐 AuthZ Matrix" ................ [ Open → ]
+        // Title row: "🔐  AuthZ Matrix" .............. [ Open → ]
         val titleRow = JPanel(BorderLayout())
         titleRow.isOpaque = false
-        val name = JLabel("${m.icon()}  ${m.title()}")
-        name.font = name.font.deriveFont(Font.BOLD, name.font.size + 1f)
+        val name = JLabel("${m.icon()}   ${m.title()}")
+        name.font = name.font.deriveFont(Font.BOLD, name.font.size + 2f)
+        name.foreground = DashTheme.text
         titleRow.add(name, BorderLayout.WEST)
         val open = JButton(I18n.t("home.open"))
         open.addActionListener { switchTo(m.id) }
         titleRow.add(open, BorderLayout.EAST)
         panel.add(titleRow, BorderLayout.NORTH)
 
-        // Chips row.
         if (st.chips.isNotEmpty()) {
-            val chips = JPanel(GridLayout(1, st.chips.size, 8, 0))
+            val chips = JPanel(GridLayout(1, st.chips.size, 10, 0))
             chips.isOpaque = false
-            for (c in st.chips) chips.add(chip(c.label, c.value, c.tone))
+            for (c in st.chips) chips.add(chip(c))
             panel.add(chips, BorderLayout.CENTER)
         }
 
-        // Optional status line.
         st.line?.let {
-            val line = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
+            val line = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0))
             line.isOpaque = false
-            line.add(JLabel("●  ").apply { foreground = toneColor(st.lineTone) })
-            line.add(JLabel(it))
+            line.add(JLabel("●").apply { foreground = DashTheme.tone(st.lineTone) })
+            line.add(JLabel(it).apply { foreground = DashTheme.text })
             panel.add(line, BorderLayout.SOUTH)
         }
         return panel
     }
 
-    private fun chip(label: String, value: String, tone: Tone): JComponent {
+    private fun chip(c: StatChip): JComponent {
         val p = JPanel()
         p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
+        p.background = DashTheme.chipFill
         p.border = BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(BORDER),
-            BorderFactory.createEmptyBorder(6, 10, 6, 10),
+            BorderFactory.createLineBorder(DashTheme.line),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12),
         )
-        val v = JLabel(value)
-        v.font = v.font.deriveFont(Font.BOLD, v.font.size + 6f)
-        v.foreground = toneColor(tone)
+        val v = JLabel(c.value)
+        v.font = v.font.deriveFont(Font.BOLD, v.font.size + 10f)
+        v.foreground = DashTheme.tone(c.tone)
         v.alignmentX = Component.LEFT_ALIGNMENT
-        val l = JLabel(label)
-        l.foreground = MUTED
+        val l = JLabel(c.label.uppercase())
+        l.font = l.font.deriveFont(l.font.size - 1f)
+        l.foreground = DashTheme.muted
         l.alignmentX = Component.LEFT_ALIGNMENT
-        p.add(v); p.add(l)
+        p.add(v); p.add(Box.createVerticalStrut(2)); p.add(l)
         return p
-    }
-
-    private fun toneColor(t: Tone): Color = when (t) {
-        Tone.GOOD -> Color(0x2E, 0x7D, 0x32)
-        Tone.WARN -> Color(0xE6, 0x7E, 0x00)
-        Tone.BAD -> Color(0xC6, 0x28, 0x28)
-        Tone.NEUTRAL -> UIColor
-    }
-
-    private companion object {
-        val MUTED = Color(0x88, 0x88, 0x88)
-        val BORDER = Color(0x9E, 0x9E, 0x9E, 0x60)
-        val UIColor = JLabel().foreground // theme default text colour
     }
 }
