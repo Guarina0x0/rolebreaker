@@ -8,8 +8,8 @@ class PayloadLibraryTest {
     @Test
     fun `bundled payload resource loads`() {
         val cats = PayloadLibrary.categories
-        assertTrue(cats.size >= 20, "expected a rich set of categories, got ${cats.size}")
-        assertTrue(PayloadLibrary.total >= 150, "expected many payloads, got ${PayloadLibrary.total}")
+        assertTrue(cats.size >= 40, "expected a rich set of categories, got ${cats.size}")
+        assertTrue(PayloadLibrary.total >= 300, "expected many payloads, got ${PayloadLibrary.total}")
     }
 
     @Test
@@ -29,7 +29,8 @@ class PayloadLibraryTest {
     @Test
     fun `key categories are present`() {
         val names = PayloadLibrary.categories.keys
-        listOf("XSS", "SSTI (template injection)", "SSRF - cloud metadata", "Log4Shell / JNDI")
+        listOf("XSS", "SSTI - Jinja2 (Python)", "SSRF - AWS metadata", "Log4Shell / JNDI",
+            "Reverse shell - Linux", "LFI - Windows files")
             .forEach { assertTrue(names.contains(it), "missing category: $it") }
     }
 }

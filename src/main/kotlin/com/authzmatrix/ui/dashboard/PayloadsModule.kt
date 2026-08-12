@@ -20,8 +20,10 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JList
+import javax.swing.JMenuItem
 import javax.swing.JOptionPane
 import javax.swing.JPanel
+import javax.swing.JPopupMenu
 import javax.swing.JScrollPane
 import javax.swing.JSplitPane
 import javax.swing.JTable
@@ -131,8 +133,31 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
         })
         categoryList.addListSelectionListener { if (!it.valueIsAdjusting) applyFilter() }
         table.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) { if (e.clickCount == 2) copySelected() }
+            override fun mousePressed(e: MouseEvent) = maybePopup(e)
+            override fun mouseReleased(e: MouseEvent) = maybePopup(e)
+            override fun mouseClicked(e: MouseEvent) {
+                if (e.clickCount == 2 && !e.isPopupTrigger) { selectRowAt(e); rowMenu().show(table, e.x, e.y) }
+            }
         })
+    }
+
+    private fun maybePopup(e: MouseEvent) {
+        if (e.isPopupTrigger) { selectRowAt(e); rowMenu().show(table, e.x, e.y) }
+    }
+
+    private fun selectRowAt(e: MouseEvent) {
+        val r = table.rowAtPoint(e.point)
+        if (r >= 0) table.setRowSelectionInterval(r, r)
+    }
+
+    /** Right-click / double-click menu (rebuilt each time so labels track the language). */
+    private fun rowMenu(): JPopupMenu {
+        val menu = JPopupMenu()
+        val copy = JMenuItem(I18n.t("pl.copy")); copy.addActionListener { copySelected(withNote = false) }
+        val copyNote = JMenuItem(I18n.t("pl.copyNote")); copyNote.addActionListener { copySelected(withNote = true) }
+        val copyAll = JMenuItem(I18n.t("pl.copyAll")); copyAll.addActionListener { copyAllShown() }
+        menu.add(copy); menu.add(copyNote); menu.addSeparator(); menu.add(copyAll)
+        return menu
     }
 
     // ---- behaviour ------------------------------------------------------------
@@ -155,13 +180,25 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
         tableModel.set(rows)
     }
 
-    private fun copySelected() {
+    private fun copySelected(withNote: Boolean = false) {
         val row = table.selectedRow.takeIf { it >= 0 } ?: return
         val value = tableModel.valueAt(row) ?: return
-        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(value), null)
+        val note = tableModel.noteAt(row).orEmpty()
+        val text = if (withNote && note.isNotBlank()) "$value\t# $note" else value
+        toClipboard(text)
         val shown = if (value.length > 60) value.take(57) + "…" else value
         status.text = I18n.t("pl.copied", shown)
     }
+
+    private fun copyAllShown() {
+        val all = tableModel.allValues()
+        if (all.isEmpty()) return
+        toClipboard(all.joinToString("\n"))
+        status.text = I18n.t("pl.copiedAll", all.size)
+    }
+
+    private fun toClipboard(text: String) =
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
 
     private fun addCustom() {
         val value = JOptionPane.showInputDialog(ctx.uiFrame(), I18n.t("pl.addValue"),
@@ -221,7 +258,9 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
 
         fun set(list: List<Pair<String, Payload>>) { rows.clear(); rows.addAll(list); fireTableDataChanged() }
         fun valueAt(r: Int): String? = rows.getOrNull(r)?.second?.value
+        fun noteAt(r: Int): String? = rows.getOrNull(r)?.second?.note
         fun categoryAt(r: Int): String? = rows.getOrNull(r)?.first
+        fun allValues(): List<String> = rows.map { it.second.value }
         fun structureChanged() = fireTableStructureChanged()
 
         override fun getRowCount() = rows.size

