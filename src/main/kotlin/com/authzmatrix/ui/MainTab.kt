@@ -129,9 +129,16 @@ class MainTab(private val ctx: AppContext) {
         capture.addActionListener { ctx.capture.enabled = capture.isSelected }
 
         val clearResults = JButton(I18n.t("tb.clearMatrix"))
-        clearResults.addActionListener { matrixModel.clear() }
+        clearResults.addActionListener {
+            matrixModel.clear()
+            ctx.resetAutoSeen() // allow the same endpoints to be auto-tested again
+            recomputeFindings()
+        }
         val clearActivity = JButton(I18n.t("tb.clearActivity"))
-        clearActivity.addActionListener { activityModel.clear() }
+        clearActivity.addActionListener {
+            activityModel.clear()
+            recomputeFindings()
+        }
         val exportCsv = JButton(I18n.t("tb.exportCsv"))
         exportCsv.addActionListener { export("csv") }
         val exportHtml = JButton(I18n.t("tb.exportHtml"))
@@ -375,6 +382,11 @@ class MainTab(private val ctx: AppContext) {
         bg("rolebreaker-auto-sweep") {
             ctx.historyScanner.scan(minutes, true)
             ctx.store.syncPersonasFromTokens()
+            if (ctx.store.personas.any { !it.anonymous } && ctx.store.ensureAnonymousPersona()) {
+                ctx.api.logging().logToOutput(
+                    "RoleBreaker: no anonymous persona found — added one so unauthenticated access is tested",
+                )
+            }
             com.authzmatrix.core.PrivilegeRanker.assignLevels(ctx.store.personas)
             ctx.store.fireChanged() // persist levels + refresh UI
             val reqs = ctx.historyScanner.recentRequests(minutes)

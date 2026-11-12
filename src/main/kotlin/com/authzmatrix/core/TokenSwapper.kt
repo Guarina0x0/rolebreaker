@@ -18,10 +18,35 @@ object TokenSwapper {
         else -> req
     }
 
-    private fun strip(req: HttpRequest, p: Persona): HttpRequest = when (p.location) {
-        TokenLocation.BEARER_HEADER -> removeHeader(req, "Authorization")
-        TokenLocation.CUSTOM_HEADER -> removeHeader(req, p.headerName)
-        TokenLocation.COOKIE -> removeCookie(req, p.cookieName)
+    private fun strip(req: HttpRequest, p: Persona): HttpRequest {
+        var out = req
+
+        // Strip unconditionally: an "anonymous" replay must never inherit a Bearer credential,
+        // even if the persona was configured for a custom header/cookie.
+        out = removeHeader(out, "Authorization")
+
+        // Configured auth slot (no-op when it is Authorization, already removed above).
+        out = removeHeader(out, p.headerName)
+        out = removeCookie(out, p.cookieName)
+
+        // Other headers carrying a JWT (X-Auth-Token, access_token, …).
+        val jwtHeaderNames = out.headers()
+            .filter { !it.name().equals("Cookie", ignoreCase = true) && Jwt.findAll(it.value()).isNotEmpty() }
+            .map { it.name() }
+            .distinct()
+        for (name in jwtHeaderNames) out = removeHeader(out, name)
+
+        // JWTs hidden in cookies; keep non-auth cookies such as locale/CSRF.
+        return stripJwtCookies(out)
+    }
+
+    private fun stripJwtCookies(req: HttpRequest): HttpRequest {
+        val existing = req.headerValue("Cookie") ?: return req
+        val kept = existing.split(";")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && Jwt.findAll(it.substringAfter("=", "")).isEmpty() }
+        return if (kept.isEmpty()) removeHeader(req, "Cookie")
+        else setHeader(req, "Cookie", kept.joinToString("; "))
     }
 
     private fun setHeader(req: HttpRequest, name: String, value: String): HttpRequest =

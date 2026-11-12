@@ -44,7 +44,7 @@ java {
 }
 
 tasks.shadowJar {
-    // Produce a clean name: build/libs/authz-matrix-<version>.jar
+    // Produce a clean name: build/libs/rolebreaker-<version>.jar
     archiveClassifier.set("")
 }
 

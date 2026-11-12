@@ -104,6 +104,26 @@ class PersonaStore {
     }
 
     /**
+     * Ensure the auto-sweep has an unauthenticated identity to replay with. Anonymous access is a
+     * CRITICAL finding, but roles discovered from JWTs can never produce it on their own, so the
+     * sweep adds one persona the first time and reuses it afterwards. A user-created (possibly
+     * disabled) anon persona is respected: nothing is added if one already exists.
+     *
+     * @return true when a new anonymous persona was created.
+     */
+    fun ensureAnonymousPersona(): Boolean {
+        if (personas.any { it.anonymous }) return false
+        var name = "anonymous"
+        var n = 2
+        while (personas.any { it.name.equals(name, ignoreCase = true) }) name = "anonymous${n++}"
+        val p = Persona(name = name, anonymous = true)
+        p.level = (personas.filter { !it.anonymous }.maxOfOrNull { it.level } ?: 0) + 10
+        personas += p
+        fireChanged()
+        return true
+    }
+
+    /**
      * Group discovered JWTs by role and create/refresh one persona per distinct role (with the most
      * recent non-expired token), assigning distinct default levels. No automatic anon persona is
      * created — add one by hand if you want to test unauthenticated access. Returns personas created.

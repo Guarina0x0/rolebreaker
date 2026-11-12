@@ -29,7 +29,7 @@ IDOR), while the one correctly-enforced endpoint (`POST …/delete`) stays **gre
 |---------|-------------|
 | **JWT auto-discovery** | Scans proxy history + live traffic; no pasting |
 | **Persona auto-creation** | One persona per distinct role from captured tokens |
-| **⚡ Auto sweep** | One click: scan, rank, test all recent requests with lower roles |
+| **⚡ Auto sweep** | One click: scan, rank, test all recent requests with lower roles + anonymous |
 | **Continuous lower-priv mode** | Browse as admin — every new request is background-tested as lower roles |
 | **Access matrix** | Endpoint × persona, colour-coded verdict |
 | **Findings view** | Ranked, severity-coloured; only the interesting results |
@@ -69,7 +69,7 @@ Requires JDK 17+. Uses the bundled Gradle wrapper — no Gradle install needed.
 Output: `build/libs/rolebreaker-0.1.0.jar`  
 (fat-jar; bundles Kotlin stdlib + org.json — Montoya API is provided by Burp at runtime)
 
-Run the test suite (55 tests — JWT, verdict classification, IDOR, findings, privilege ranking):
+Run the test suite (68 tests — JWT, verdict classification, IDOR, findings, privilege ranking):
 
 ```bash
 ./gradlew test
@@ -101,8 +101,9 @@ The UI loads in **English** by default. Use the **Language** selector on the far
 3. Enter how many minutes of history to cover (default: 20).
 4. The extension:
    - Scans for active JWTs → auto-creates one persona per role
+   - Adds an **anonymous** persona if none exists, so unauthenticated access is covered too
    - Auto-ranks privilege (admin/root/super > manager > user/member > guest/anon)
-   - Prompts you to confirm / reorder the hierarchy with a drag-and-drop form
+   - Shows the detected hierarchy (most → least privileged)
    - Tests every in-scope, non-static request from that window with the lower-privilege roles
 5. Check the **⚠ Findings** tab.
 
@@ -132,6 +133,8 @@ Enable **"Continuo ↓priv (fondo)"** in the toolbar. As you browse as a high-pr
 - **"Limpiar personas"** — wipe all personas (including any persisted from previous sessions).
 
 Personas and refresh requests persist across Burp restarts (Burp Preferences). Tokens are only used if valid-in-time — expired tokens are skipped and refreshed automatically when possible.
+
+An **anonymous** persona strips `Authorization`, its configured header/cookie, and any other header or cookie carrying a JWT — so cookie-based sessions are stripped too. Auto sweep creates one automatically if you don't have one.
 
 ---
 
@@ -172,7 +175,7 @@ Right-click → **"JWT attacks (none/strip/escala)…"**. The dialog lets you fo
 - **Signature stripped** — keeps the header+claims, removes the signature bytes
 - **Role escalation** — bumps the role claim to `admin` (or a custom value you type)
 
-Each is sent once; the result lands in the activity log. If the server accepts a forged token the verdict is **ALLOWED** — clear evidence of broken JWT verification.
+Each is sent once; the result lands in the activity log. A 2xx response is classified **ALLOWED** (unless it is a login/deny wall), and a **CRITICAL “Forged JWT accepted”** finding appears in the Findings tab — clear evidence of broken JWT verification. 401/403 stays DENIED.
 
 ---
 

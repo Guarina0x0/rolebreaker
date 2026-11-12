@@ -38,6 +38,7 @@ class DashboardTab(private val ctx: AppContext) {
     private val cards = JPanel(CardLayout())
     private val sidebar = JPanel()
     private val navItems = LinkedHashMap<String, NavItem>()
+    private val langLabel = JLabel(I18n.t("tb.lang")).apply { foreground = DashTheme.muted }
     private var selectedId = "home"
 
     init {
@@ -83,7 +84,7 @@ class DashboardTab(private val ctx: AppContext) {
 
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0))
         right.isOpaque = false
-        right.add(JLabel(I18n.t("tb.lang")).apply { foreground = DashTheme.muted })
+        right.add(langLabel)
         right.add(langCombo())
         bar.add(right, BorderLayout.EAST)
         return bar
@@ -129,6 +130,7 @@ class DashboardTab(private val ctx: AppContext) {
 
     private fun relabel() {
         navItems.values.forEach { it.relabel() }
+        langLabel.text = I18n.t("tb.lang")
         sidebar.revalidate(); sidebar.repaint()
     }
 

@@ -93,7 +93,9 @@ class ReplayEngine(
         val resp = rr?.response()
         val status = resp?.statusCode()?.toInt() ?: -1
         val len = resp?.bodyToString()?.length ?: 0
-        emit(what, req.method(), req.url(), status, len, detector.classify(-1, 0, resp), rr)
+        // No baseline exists for a forged-token probe: a 2xx must be read as "accepted" or the
+        // Findings analyzer would never surface the CRITICAL forged-JWT finding.
+        emit(what, req.method(), req.url(), status, len, detector.classifyStandalone(resp), rr)
     }
 
     private fun emit(what: String, method: String, url: String, status: Int, len: Int,

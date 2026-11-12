@@ -35,4 +35,20 @@ class PersonaSyncTest {
         val admin = store.personas.first { it.name == "admin" }
         assertTrue(Jwt.parse(admin.token)?.exp == later, "persona should hold the freshest active token")
     }
+
+    @Test fun anonymousPersonaIsAddedOnceAndRanksLowest() {
+        val store = PersonaStore()
+        val future = Instant.now().epochSecond + 3600
+        store.capture(tok("admin", "a", future), "src")
+        store.syncPersonasFromTokens()
+
+        assertTrue(store.ensureAnonymousPersona(), "first call should create the anon persona")
+        assertFalse(store.ensureAnonymousPersona(), "second call must not duplicate it")
+        val anon = store.personas.single { it.anonymous }
+        assertTrue(anon.enabled)
+
+        PrivilegeRanker.assignLevels(store.personas)
+        val admin = store.personas.first { !it.anonymous }
+        assertTrue(admin.level < anon.level, "anonymous must rank below every authenticated role")
+    }
 }

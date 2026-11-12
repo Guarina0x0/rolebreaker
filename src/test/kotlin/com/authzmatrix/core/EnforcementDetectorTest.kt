@@ -48,4 +48,37 @@ class EnforcementDetectorTest {
         // baselineStatus < 0 means the baseline send failed → can't claim the 2xx is "access".
         assertEquals(Verdict.CHECK, d.classify(-1, 0, 200, "some content"))
     }
+
+    // --- single-shot probes (no baseline), e.g. forged-JWT attacks -----------------
+
+    @Test fun standalone2xxIsAllowed() =
+        assertEquals(Verdict.ALLOWED, d.classifyStandalone(200, "sensitive data"))
+
+    @Test fun standalone401And403AreDenied() {
+        assertEquals(Verdict.DENIED, d.classifyStandalone(401, "no"))
+        assertEquals(Verdict.DENIED, d.classifyStandalone(403, "no"))
+    }
+
+    @Test fun standaloneLoginWallIsDeniedEvenOn200() {
+        val body = "<html><form><input type=\"password\" name=\"pass\"></form></html>"
+        assertEquals(Verdict.DENIED, d.classifyStandalone(200, body))
+    }
+
+    @Test fun standaloneDenyBodyIsDenied() =
+        assertEquals(Verdict.DENIED, d.classifyStandalone(200, "Error: Access Denied"))
+
+    @Test fun standaloneJwtValidationErrorIsDenied() {
+        assertEquals(Verdict.DENIED, d.classifyStandalone(200, """{"error":"invalid token"}"""))
+        assertEquals(Verdict.DENIED, d.classifyStandalone(200, "Signature verification failed"))
+    }
+
+    @Test fun ordinaryTokenContentIsNotADenial() {
+        assertEquals(Verdict.ALLOWED, d.classifyStandalone(200, """{"token":"abc","balance":10}"""))
+    }
+
+    @Test fun standaloneRedirectToLoginIsDenied() =
+        assertEquals(Verdict.DENIED, d.classifyStandalone(302, "", "https://h/login?next=/x"))
+
+    @Test fun standaloneServerErrorNeedsReview() =
+        assertEquals(Verdict.CHECK, d.classifyStandalone(500, "boom"))
 }

@@ -46,6 +46,31 @@ class EnforcementDetector {
     }
 
     /**
+     * Classify a response when there is no baseline to compare against — used by single-shot
+     * probes such as forged JWTs. A 2xx means the server **accepted** the probe (ALLOWED), unless
+     * the body is actually a deny/login wall. 401/403 = rejected; everything else needs a human.
+     */
+    fun classifyStandalone(resp: HttpResponse?): Verdict {
+        if (resp == null) return Verdict.ERROR
+        return classifyStandalone(
+            resp.statusCode().toInt(),
+            resp.bodyToString(),
+            resp.headerValue("Location"),
+        )
+    }
+
+    /** Pure, unit-testable form of [classifyStandalone] (no Burp types). */
+    fun classifyStandalone(code: Int, body: String, location: String? = null): Verdict {
+        if (code in 300..399) {
+            return if (LOGIN_URL.containsMatchIn(location.orEmpty())) Verdict.DENIED else Verdict.CHECK
+        }
+        if (code == 401 || code == 403) return Verdict.DENIED
+        if (denyRegexes.any { it.containsMatchIn(body) }) return Verdict.DENIED
+        if (loginRegexes.any { it.containsMatchIn(body) }) return Verdict.DENIED
+        return if (code in 200..299) Verdict.ALLOWED else Verdict.CHECK
+    }
+
+    /**
      * Pure classification core (no Burp types) — unit-testable. [baselineNormLen] is the normalized
      * length of the baseline body; [baselineBody] is the baseline itself so that deny/login markers
      * which ALSO appear in the baseline (e.g. an admin change-password page) are treated as normal
@@ -73,6 +98,9 @@ class EnforcementDetector {
     companion object {
         val DEFAULT_DENY: List<Regex> = listOf(
             Regex("(?i)\\b(unauthori[sz]ed|forbidden|access denied|permission denied|not allowed|acceso denegado|no autorizado)\\b"),
+            // JWT validation errors are denials too (common on forged-token probes, often with 200).
+            Regex("(?i)\\b(invalid|malformed|expired|missing|revoked|bad)\\s+(jwt|token|access[_ -]?token|bearer|signature)\\b"),
+            Regex("(?i)\\b(signature (verification )?(failed|invalid)|jwt (validation|verification) failed)\\b"),
         )
 
         // Strong login-form signals; precise on purpose to avoid marking real content as a wall.

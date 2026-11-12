@@ -52,7 +52,10 @@ class FindingsAnalyzerTest {
 
     @Test fun forgedJwtAcceptedFromActivity() {
         val store = storeWith(Persona("user"))
-        val e = ActivityEntry("00:00:00", "🔴 JWT:none", "GET", "http://h/x", 200, 100, Verdict.ALLOWED, null)
+        // A forged token has no baseline: a 2xx must be classified ALLOWED, not CHECK, or the
+        // CRITICAL finding below would silently disappear.
+        val verdict = EnforcementDetector().classifyStandalone(200, "secret data")
+        val e = ActivityEntry("00:00:00", "🔴 JWT:none", "GET", "http://h/x", 200, 100, verdict, null)
 
         val f = FindingsAnalyzer.analyze(emptyList(), listOf(e), store)
         assertTrue(f.any { it.type == I18n.t("find.forged") && it.severity == Severity.CRITICAL })

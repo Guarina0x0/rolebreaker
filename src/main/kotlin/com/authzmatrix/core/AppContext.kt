@@ -128,15 +128,18 @@ class AppContext(val api: MontoyaApi) {
 
     /**
      * Enabled personas less privileged than the request's own identity (anon always qualifies).
-     * Empty if the request's identity can't be matched to a persona — we won't guess "lower" and
-     * risk testing the most-privileged role as if it were lower.
+     * Empty if the request's identity can't be matched to a persona, or if several roles share the
+     * same level: in that case we would be guessing which ones are "lower" and could label a more
+     * privileged role as a finding. The user can order privileges explicitly.
      */
     fun lowerPrivTargets(req: HttpRequest): List<com.authzmatrix.model.Persona> {
         val current = currentPersonaFor(req) ?: return emptyList()
         val personas = store.personas
-        val levelsConfigured = personas.filter { !it.anonymous }.map { it.level }.distinct().size > 1
+        val nonAnon = personas.filter { !it.anonymous }
+        val levelsConfigured = nonAnon.map { it.level }.distinct().size > 1
+        if (!levelsConfigured && nonAnon.size > 1) return emptyList()
         val candidates = personas.filter { it.enabled && it !== current }
-        return if (levelsConfigured) candidates.filter { it.level > current.level || it.anonymous } else candidates
+        return if (levelsConfigured) candidates.filter { it.anonymous || it.level > current.level } else candidates
     }
 
     /** Persona whose identity matches the request's token (by sub, then role). */

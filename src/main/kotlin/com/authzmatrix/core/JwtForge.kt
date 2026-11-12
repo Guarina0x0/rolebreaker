@@ -1,5 +1,6 @@
 package com.authzmatrix.core
 
+import burp.api.montoya.http.message.HttpHeader
 import burp.api.montoya.http.message.requests.HttpRequest
 import org.json.JSONObject
 
@@ -32,18 +33,27 @@ object JwtForge {
             .firstOrNull { info.payload.has(it) }
 
     /**
-     * Replace a raw token wherever it actually lives in the request — the exact header carrying
-     * it (Authorization, Cookie, X-Auth-Token, …) or the body — so the forged variant is
-     * delivered the same way as the original and doesn't leave the real credential in place.
+     * Replace a raw token wherever it actually lives in the request — **every** header, the path/
+     * query and the body. Replacing only the first hit would leave a real credential behind when
+     * the same token is also present in a cookie, an X-Auth-Token header or the body, and the
+     * server might authenticate with the leftover one instead of the forged token.
      */
     fun replaceToken(req: HttpRequest, oldTok: String, newTok: String): HttpRequest {
-        for (h in req.headers()) {
-            if (h.value().contains(oldTok)) return setHeader(req, h.name(), h.value().replace(oldTok, newTok))
-        }
-        val body = req.bodyToString()
-        if (body.contains(oldTok)) return req.withBody(body.replace(oldTok, newTok))
+        var out = req
+
+        val changed = req.headers()
+            .filter { it.value().contains(oldTok) }
+            .map { HttpHeader.httpHeader(it.name(), it.value().replace(oldTok, newTok)) }
+        if (changed.isNotEmpty()) out = out.withUpdatedHeaders(changed)
+
+        val path = out.path()
+        if (path.contains(oldTok)) out = out.withPath(path.replace(oldTok, newTok))
+
+        val body = out.bodyToString()
+        if (body.contains(oldTok)) out = out.withBody(body.replace(oldTok, newTok))
+
         // Fallback (token not located verbatim): assume Bearer in Authorization.
-        return setHeader(req, "Authorization", "Bearer $newTok")
+        return if (out !== req) out else setHeader(req, "Authorization", "Bearer $newTok")
     }
 
     private fun setHeader(req: HttpRequest, name: String, value: String): HttpRequest =
