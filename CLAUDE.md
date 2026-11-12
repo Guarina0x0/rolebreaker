@@ -35,9 +35,12 @@ The demo lab is local-only and git-ignored: `cd demo-lab && node server.js` (por
 - `core/EnforcementDetector.kt` — response → `Verdict` (normalisation, deny/login walls,
   baseline comparison, and `classifyStandalone` for forged-token probes).
 - `core/FindingsAnalyzer.kt` — derives ranked `Finding`s from matrix rows + activity entries.
+- `core/FindingsExport.kt` — serialises findings to CSV/JSON (used by the Findings tab).
+- `core/CurlBuilder.kt` — turns a request into a shell-ready `curl` command.
 - `core/AppContext.lowerPrivTargets` — decides which personas are "lower" than a request's role.
 - `ui/DashboardTab.kt` — sidebar shell. Modules implement `core/DashboardModule`.
-- `ui/MainTab.kt` — the AuthZ Matrix module: personas, catalog, matrix, activity, findings.
+- `ui/MainTab.kt` — the AuthZ Matrix module: personas, catalog, matrix, activity, findings
+  (search/severity filter, export, cURL/Repeater actions).
 - `ui/dashboard/*Module.kt` — Home, Matrix, Payloads, and (private build) PwnDoc modules.
 - `handler/ProxyHttpHandler.kt` — captures traffic and drives auto modes.
 - `handler/AuthzContextMenu.kt` — right-click actions.
@@ -71,6 +74,12 @@ branch-specific. Do not add private PwnDoc references to shared files.
 - **Expired tokens are never sent** for a non-anonymous persona; the replay engine skips them
   (and tries a configured refresh first).
 - **All UI updates from background threads must go through `SwingUtilities.invokeLater`.**
+- **Findings recomputation is debounced** (250 ms Swing Timer) because a sweep emits many rows
+  and activity entries; `recomputeFindingsNow()` is for explicit user actions (clear, crack).
+- **Persona token column is display-only**: it renders a summary, so editing it would overwrite
+  the real token. Use the **Set token…** button (`MainTab.setPersonaToken`).
+- **In-memory logs are bounded**: activity 5,000 entries, token catalog 1,000 tokens, and each
+  auto-mode dedupe set 10,000 URLs. Keep these caps in mind if you add data to those models.
 - **Tests are pure logic** (no Montoya implementation). Don't instantiate `HttpRequest`/`HttpResponse`
   in tests if you can keep the logic in a pure overload instead.
 - Results (matrix/activity/findings) are in-memory; personas and payloads persist in Burp

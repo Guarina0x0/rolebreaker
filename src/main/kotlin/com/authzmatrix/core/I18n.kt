@@ -102,6 +102,8 @@ object I18n {
         "cfg.catalog" to "Discovered identities (JWT, deduplicated)",
         "btn.add" to "Add",
         "btn.remove" to "Remove",
+        "btn.setToken" to "Set token…",
+        "btn.setToken.tip" to "Paste or replace the token of the selected persona",
         "btn.refreshExpired" to "Refresh expired",
         "btn.refreshExpired.tip" to "Re-login personas with an expired token that have a refresh request configured",
         "btn.clearPersonas" to "Clear personas",
@@ -117,10 +119,16 @@ object I18n {
 
         // menus (matrix)
         "menu.toRepeater" to "Send original to Repeater",
+        "menu.findingToRepeater" to "Send finding request to Repeater",
+        "menu.copyCurl" to "Copy as cURL",
 
         // dialogs / messages
         "dlg.title" to "RoleBreaker",
         "msg.confirmClearPersonas" to "Delete all personas?",
+        "setToken.title" to "Set persona token",
+        "setToken.persona" to "Token for «%s» (leave empty to clear):",
+        "setToken.hint" to "<html><i>Paste the raw JWT or opaque token; a leading <code>Bearer</code> is stripped.</i></html>",
+        "setToken.noPersona" to "Select a persona first.",
 
         "sweep.prompt" to "Auto sweep — use the last N minutes of history:\nscans active JWTs, creates roles, ranks privileges automatically and tests\neach request with the LOWEST-privilege roles.",
         "sweep.noRoles" to "No roles with an active token were discovered in the last %d min.",
@@ -202,6 +210,12 @@ object I18n {
         "jwt.expired" to "⚠ EXPIRED",
 
         // findings
+        "find.filter" to "Filter:",
+        "find.filterAll" to "All severities",
+        "find.search" to "Search severity, type, detail or URL…",
+        "find.exportCsv" to "Export findings CSV",
+        "find.exportJson" to "Export findings JSON",
+        "find.exportEmpty" to "There are no findings to export (check the filter).",
         "find.anonAccess" to "Anonymous access",
         "find.anonAccess.sum" to "Without a token, %s is accessible (HTTP %d)",
         "find.idor" to "IDOR / horizontal access",
@@ -362,6 +376,8 @@ object I18n {
         "cfg.catalog" to "Identidades descubiertas (JWT, sin duplicados)",
         "btn.add" to "Add",
         "btn.remove" to "Remove",
+        "btn.setToken" to "Fijar token…",
+        "btn.setToken.tip" to "Pega o reemplaza el token de la persona seleccionada",
         "btn.refreshExpired" to "Refrescar caducados",
         "btn.refreshExpired.tip" to "Re-login de las personas con token caducado que tengan refresh configurado",
         "btn.clearPersonas" to "Limpiar personas",
@@ -377,10 +393,16 @@ object I18n {
 
         // menus (matrix)
         "menu.toRepeater" to "Enviar original a Repeater",
+        "menu.findingToRepeater" to "Enviar petición del finding a Repeater",
+        "menu.copyCurl" to "Copiar como cURL",
 
         // dialogs / messages
         "dlg.title" to "RoleBreaker",
         "msg.confirmClearPersonas" to "¿Borrar todas las personas?",
+        "setToken.title" to "Fijar token de la persona",
+        "setToken.persona" to "Token de «%s» (vacío para borrarlo):",
+        "setToken.hint" to "<html><i>Pega el JWT o token opaco; se elimina el prefijo <code>Bearer</code>.</i></html>",
+        "setToken.noPersona" to "Selecciona una persona primero.",
 
         "sweep.prompt" to "Auto sweep — usa el historial de los últimos N minutos:\nescanea JWT activos, crea roles, ordena privilegios solo y prueba\ncada petición con los roles de MENOR privilegio.",
         "sweep.noRoles" to "No se descubrieron roles con token activo en los últimos %d min.",
@@ -462,6 +484,12 @@ object I18n {
         "jwt.expired" to "⚠ EXPIRADO",
 
         // findings
+        "find.filter" to "Filtrar:",
+        "find.filterAll" to "Todas las severidades",
+        "find.search" to "Buscar severidad, tipo, detalle o URL…",
+        "find.exportCsv" to "Exportar findings CSV",
+        "find.exportJson" to "Exportar findings JSON",
+        "find.exportEmpty" to "No hay findings que exportar (revisa el filtro).",
         "find.anonAccess" to "Acceso anónimo",
         "find.anonAccess.sum" to "Sin token se accede a %s (HTTP %d)",
         "find.idor" to "IDOR / acceso horizontal",

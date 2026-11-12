@@ -106,14 +106,20 @@ class AppContext(val api: MontoyaApi) {
     fun autoTest(req: HttpRequest) {
         if (!autoMode.get()) return
         val key = "${req.method()} ${req.url()}"
-        if (seenInAuto.add(key)) submitTest(req)
+        if (remember(seenInAuto, key)) submitTest(req)
     }
 
     /** Continuous lower-priv entry point: dedupes, then replays as the lower-privilege roles. */
     fun autoLowerTest(req: HttpRequest) {
         if (!autoLowerMode.get()) return
         val key = "${req.method()} ${req.url()}"
-        if (seenLower.add(key)) submitLowerPriv(req)
+        if (remember(seenLower, key)) submitLowerPriv(req)
+    }
+
+    /** Bounded dedupe: after [MAX_SEEN] distinct URLs, reset rather than grow forever. */
+    private fun remember(seen: MutableSet<String>, key: String): Boolean {
+        if (seen.size >= MAX_SEEN) seen.clear()
+        return seen.add(key)
     }
 
     /** Replay [req] against the personas less privileged than its own identity. Returns true if it
@@ -173,5 +179,8 @@ class AppContext(val api: MontoyaApi) {
 
     companion object {
         private const val LANG_KEY = "rolebreaker.lang"
+
+        /** Upper bound for each auto-mode dedupe set. */
+        private const val MAX_SEEN = 10_000
     }
 }

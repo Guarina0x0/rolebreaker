@@ -74,6 +74,7 @@ class PersonaStore {
         if (capturedTokens.any { it.token == token }) return false
         val info = Jwt.parse(token)
         capturedTokens += CapturedToken(token, source, info)
+        trimCaptured()
 
         // Auto-refresh: a fresher, non-expired token of the SAME identity (sub) replaces a
         // persona's stale one, so long audits don't drift into false 401s.
@@ -101,6 +102,15 @@ class PersonaStore {
     fun clearCaptured() {
         capturedTokens.clear()
         fireChanged()
+    }
+
+    /** Drop the oldest expired/opaque tokens first, then the oldest active ones. */
+    private fun trimCaptured() {
+        if (capturedTokens.size <= MAX_CAPTURED_TOKENS) return
+        while (capturedTokens.size > MAX_CAPTURED_TOKENS) {
+            val idx = capturedTokens.indexOfFirst { it.info?.isExpired() != false }
+            capturedTokens.removeAt(if (idx >= 0) idx else 0)
+        }
     }
 
     /**
@@ -155,5 +165,10 @@ class PersonaStore {
         // No automatic personas (not even anon): only roles discovered from history.
         fireChanged()
         return created
+    }
+
+    companion object {
+        /** Bound the in-memory catalog so long audits don't grow without limit. */
+        const val MAX_CAPTURED_TOKENS = 1_000
     }
 }

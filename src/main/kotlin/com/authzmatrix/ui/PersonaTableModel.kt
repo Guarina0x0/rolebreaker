@@ -28,7 +28,7 @@ class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() 
         else -> String::class.java
     }
 
-    override fun isCellEditable(r: Int, c: Int) = true
+    override fun isCellEditable(r: Int, c: Int) = c != TOKEN_COLUMN
 
     override fun getValueAt(r: Int, c: Int): Any {
         val p = store.personas[r]
@@ -55,10 +55,6 @@ class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() 
                 val s = value?.toString() ?: ""
                 if (p.location == TokenLocation.COOKIE) p.cookieName = s else p.headerName = s
             }
-            5 -> {
-                p.token = (value?.toString() ?: "").trim().removePrefix("Bearer ").trim()
-                p.ownerSub = Jwt.parse(p.token)?.sub
-            }
             6 -> p.level = value?.toString()?.trim()?.toIntOrNull() ?: p.level
         }
         // Enabled / name / location changes reshape the matrix columns.
@@ -77,5 +73,10 @@ class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() 
         }
         val refresh = if (p.hasRefresh) "  ·  ${I18n.t("persona.refresh")}" else ""
         return "…${p.token.takeLast(8)}  ·  $flag$refresh"
+    }
+
+    companion object {
+        /** Read-only cell: it shows a summary, so editing it would overwrite the real token. */
+        const val TOKEN_COLUMN = 5
     }
 }

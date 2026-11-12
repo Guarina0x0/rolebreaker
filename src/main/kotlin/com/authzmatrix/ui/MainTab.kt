@@ -1,14 +1,23 @@
 package com.authzmatrix.ui
 
+import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.ui.editor.EditorOptions
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.CurlBuilder
+import com.authzmatrix.core.FindingsExport
 import com.authzmatrix.core.I18n
+import com.authzmatrix.core.Jwt
 import com.authzmatrix.model.Persona
+import com.authzmatrix.model.Severity
 import com.authzmatrix.model.TokenLocation
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
 import java.awt.FlowLayout
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.io.File
 import javax.swing.BorderFactory
 import javax.swing.DefaultCellEditor
@@ -25,8 +34,12 @@ import javax.swing.JPopupMenu
 import javax.swing.JScrollPane
 import javax.swing.JSplitPane
 import javax.swing.JTable
+import javax.swing.JTextArea
+import javax.swing.JTextField
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 import javax.swing.table.DefaultTableCellRenderer
 
 /**
@@ -47,6 +60,12 @@ class MainTab(private val ctx: AppContext) {
     private val activityTable = JTable(activityModel)
     private val findingsTable = JTable(findingsModel)
 
+    private val findingsFilter = JTextField()
+    private val findingsSeverity = JComboBox<SeverityFilter>()
+    private val findingsCount = JLabel(" ")
+    private val findingsTimer = javax.swing.Timer(250) { recomputeFindings() }.apply { isRepeats = false }
+    private var updatingFindingsFilter = false
+
     /** Findings not derivable from matrix/activity (e.g. a cracked HMAC secret). */
     private val manualFindings = ArrayList<com.authzmatrix.model.Finding>()
 
@@ -65,7 +84,7 @@ class MainTab(private val ctx: AppContext) {
         ctx.rowSink = { row ->
             SwingUtilities.invokeLater {
                 matrixModel.addRow(row)
-                recomputeFindings()
+                scheduleFindingsRecompute()
             }
         }
         ctx.activitySink = { e ->
@@ -73,7 +92,7 @@ class MainTab(private val ctx: AppContext) {
                 activityModel.add(e)
                 val last = activityTable.rowCount - 1
                 if (last >= 0) activityTable.scrollRectToVisible(activityTable.getCellRect(last, 0, true))
-                recomputeFindings()
+                scheduleFindingsRecompute()
             }
         }
         ctx.store.onChange {
@@ -132,12 +151,12 @@ class MainTab(private val ctx: AppContext) {
         clearResults.addActionListener {
             matrixModel.clear()
             ctx.resetAutoSeen() // allow the same endpoints to be auto-tested again
-            recomputeFindings()
+            recomputeFindingsNow()
         }
         val clearActivity = JButton(I18n.t("tb.clearActivity"))
         clearActivity.addActionListener {
             activityModel.clear()
-            recomputeFindings()
+            recomputeFindingsNow()
         }
         val exportCsv = JButton(I18n.t("tb.exportCsv"))
         exportCsv.addActionListener { export("csv") }
@@ -202,7 +221,7 @@ class MainTab(private val ctx: AppContext) {
         applyWidths(activityTable, intArrayOf(70, 170, 60, 380, 60, 70, 120))
         val activityScroll = JScrollPane(activityTable)
 
-        // Findings (severity-coloured).
+        // Findings (severity-coloured) with search/severity filter and export actions.
         findingsTable.setDefaultRenderer(Any::class.java, ColorRenderer { row, col ->
             if (col == 0) findingsModel.severityAt(row)?.background() else null
         })
@@ -210,9 +229,36 @@ class MainTab(private val ctx: AppContext) {
         applyWidths(findingsTable, intArrayOf(90, 190, 560))
         val findingsScroll = JScrollPane(findingsTable)
 
+        findingsFilter.columns = 22
+        findingsFilter.toolTipText = I18n.t("find.search")
+        updatingFindingsFilter = true
+        try {
+            val selected = (findingsSeverity.selectedItem as? SeverityFilter)?.severity
+            findingsSeverity.model = javax.swing.DefaultComboBoxModel(severityOptions().toTypedArray())
+            findingsSeverity.selectedItem = severityOptions().first { it.severity == selected }
+        } finally {
+            updatingFindingsFilter = false
+        }
+        applyFindingsFilter()
+
+        val findingsBar = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0))
+        findingsBar.add(JLabel(I18n.t("find.filter")))
+        findingsBar.add(findingsFilter)
+        findingsBar.add(findingsSeverity)
+        findingsBar.add(findingsCount)
+        val exportFindingsCsv = JButton(I18n.t("find.exportCsv"))
+        exportFindingsCsv.addActionListener { exportFindings("csv") }
+        val exportFindingsJson = JButton(I18n.t("find.exportJson"))
+        exportFindingsJson.addActionListener { exportFindings("json") }
+        findingsBar.add(exportFindingsCsv)
+        findingsBar.add(exportFindingsJson)
+        val findingsPanel = JPanel(BorderLayout())
+        findingsPanel.add(findingsBar, BorderLayout.NORTH)
+        findingsPanel.add(findingsScroll, BorderLayout.CENTER)
+
         val bottomTabs = javax.swing.JTabbedPane()
         bottomTabs.addTab(I18n.t("center.activity"), activityScroll)
-        bottomTabs.addTab(I18n.t("center.findings"), findingsScroll)
+        bottomTabs.addTab(I18n.t("center.findings"), findingsPanel)
 
         val detail = JSplitPane(
             JSplitPane.HORIZONTAL_SPLIT,
@@ -242,6 +288,11 @@ class MainTab(private val ctx: AppContext) {
                         ?.let { ctx.api.repeater().sendToRepeater(it) }
                 }
                 menu.add(toRepeater)
+                val curl = JMenuItem(I18n.t("menu.copyCurl"))
+                curl.addActionListener {
+                    matrixModel.rowAt(matrixTable.selectedRow)?.baseline?.request()?.let { copyCurl(it) }
+                }
+                menu.add(curl)
                 for (action in ctx.matrixRowActions) {
                     val item = JMenuItem(action.label())
                     item.addActionListener {
@@ -271,6 +322,9 @@ class MainTab(private val ctx: AppContext) {
         val remove = JButton(I18n.t("btn.remove")); remove.addActionListener {
             personaModel.personaAt(personaTable.selectedRow)?.let { ctx.store.removePersona(it) }
         }
+        val setToken = JButton(I18n.t("btn.setToken"))
+        setToken.toolTipText = I18n.t("btn.setToken.tip")
+        setToken.addActionListener { setPersonaToken() }
         val refreshExpired = JButton(I18n.t("btn.refreshExpired"))
         refreshExpired.toolTipText = I18n.t("btn.refreshExpired.tip")
         refreshExpired.addActionListener { ctx.refreshAllExpired() }
@@ -285,7 +339,8 @@ class MainTab(private val ctx: AppContext) {
         val order = JButton(I18n.t("btn.order"))
         order.toolTipText = I18n.t("btn.order.tip")
         order.addActionListener { PrivilegeOrderDialog.open(ctx) }
-        personaBtns.add(add); personaBtns.add(remove); personaBtns.add(refreshExpired)
+        personaBtns.add(add); personaBtns.add(remove); personaBtns.add(setToken)
+        personaBtns.add(refreshExpired)
         personaBtns.add(clearPersonas); personaBtns.add(order)
         val personaBox = JPanel(BorderLayout())
         personaBox.add(personaScroll, BorderLayout.CENTER)
@@ -343,6 +398,16 @@ class MainTab(private val ctx: AppContext) {
         findingsTable.selectionModel.addListSelectionListener {
             findingsModel.findingAt(findingsTable.selectedRow)?.requestResponse?.let { show(it) }
         }
+        findingsFilter.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = applyFindingsFilter()
+            override fun removeUpdate(e: DocumentEvent) = applyFindingsFilter()
+            override fun changedUpdate(e: DocumentEvent) = applyFindingsFilter()
+        })
+        findingsSeverity.addActionListener { applyFindingsFilter() }
+        findingsTable.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) = maybeFindingsPopup(e)
+            override fun mouseReleased(e: MouseEvent) = maybeFindingsPopup(e)
+        })
     }
 
     private fun showMatrixCell() {
@@ -358,11 +423,110 @@ class MainTab(private val ctx: AppContext) {
         rr.response()?.let { respEditor.response = it }
     }
 
+    /** Coalesce bursts of results into one findings recomputation (keeps the EDT responsive). */
+    private fun scheduleFindingsRecompute() = findingsTimer.restart()
+
+    private fun recomputeFindingsNow() {
+        findingsTimer.stop()
+        recomputeFindings()
+    }
+
+    private fun applyFindingsFilter() {
+        if (updatingFindingsFilter) return
+        val severity = (findingsSeverity.selectedItem as? SeverityFilter)?.severity
+        findingsModel.setFilter(findingsFilter.text, severity)
+        findingsCount.text = "${findingsModel.rowCount} / ${findingsModel.all().size}"
+    }
+
+    private fun severityOptions(): List<SeverityFilter> =
+        listOf(SeverityFilter(null)) + Severity.values().map { SeverityFilter(it) }
+
+    private fun maybeFindingsPopup(e: MouseEvent) {
+        if (!e.isPopupTrigger) return
+        val row = findingsTable.rowAtPoint(e.point)
+        if (row < 0) return
+        findingsTable.setRowSelectionInterval(row, row)
+        buildFindingsMenu().show(findingsTable, e.x, e.y)
+    }
+
+    private fun buildFindingsMenu(): JPopupMenu {
+        val menu = JPopupMenu()
+        val req = findingsModel.findingAt(findingsTable.selectedRow)?.requestResponse?.request()
+
+        val toRepeater = JMenuItem(I18n.t("menu.findingToRepeater"))
+        toRepeater.isEnabled = req != null
+        toRepeater.addActionListener { req?.let { ctx.api.repeater().sendToRepeater(it) } }
+
+        val curl = JMenuItem(I18n.t("menu.copyCurl"))
+        curl.isEnabled = req != null
+        curl.addActionListener { req?.let { copyCurl(it) } }
+
+        menu.add(toRepeater)
+        menu.add(curl)
+        return menu
+    }
+
+    private fun copyCurl(req: HttpRequest) {
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(CurlBuilder.build(req)), null)
+        ctx.api.logging().logToOutput("RoleBreaker: request copied as cURL")
+    }
+
+    /** Paste/replace a token without editing the read-only summary column in the table. */
+    private fun setPersonaToken() {
+        val persona = personaModel.personaAt(personaTable.selectedRow)
+        if (persona == null) {
+            JOptionPane.showMessageDialog(root, I18n.t("setToken.noPersona"), I18n.t("dlg.title"),
+                JOptionPane.WARNING_MESSAGE)
+            return
+        }
+        val area = JTextArea(5, 60)
+        area.lineWrap = true
+        area.wrapStyleWord = true
+        val panel = JPanel(BorderLayout(0, 6))
+        panel.add(JLabel(I18n.t("setToken.persona", persona.name)), BorderLayout.NORTH)
+        panel.add(JScrollPane(area), BorderLayout.CENTER)
+        panel.add(JLabel(I18n.t("setToken.hint")), BorderLayout.SOUTH)
+
+        if (JOptionPane.showConfirmDialog(root, panel, I18n.t("setToken.title"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return
+
+        val token = area.text.trim().removePrefix("Bearer ").removePrefix("bearer ").trim()
+        persona.token = token
+        persona.ownerSub = Jwt.parse(token)?.sub
+        ctx.store.fireChanged()
+    }
+
+    private fun exportFindings(kind: String) {
+        val items = findingsModel.visible()
+        if (items.isEmpty()) {
+            JOptionPane.showMessageDialog(root, I18n.t("find.exportEmpty"), I18n.t("dlg.title"),
+                JOptionPane.INFORMATION_MESSAGE)
+            return
+        }
+        val fc = JFileChooser()
+        fc.selectedFile = File("rolebreaker-findings.$kind")
+        if (fc.showSaveDialog(root) != JFileChooser.APPROVE_OPTION) return
+        val text = if (kind == "csv") FindingsExport.csv(items) else FindingsExport.json(items)
+        try {
+            java.nio.file.Files.writeString(fc.selectedFile.toPath(), text)
+            ctx.api.logging().logToOutput("RoleBreaker: exported ${items.size} finding(s) to ${fc.selectedFile}")
+        } catch (ex: Exception) {
+            JOptionPane.showMessageDialog(root, I18n.t("export.error", ex.message ?: ""), "Export",
+                JOptionPane.ERROR_MESSAGE)
+        }
+    }
+
     private fun recomputeFindings() {
+        val selected = findingsModel.findingAt(findingsTable.selectedRow)
         val derived = com.authzmatrix.core.FindingsAnalyzer.analyze(
             matrixModel.rowsSnapshot(), activityModel.entriesSnapshot(), ctx.store,
         )
         findingsModel.set((derived + manualFindings).sortedBy { it.severity.ordinal })
+        selected?.let { old ->
+            val idx = findingsModel.indexOf(old)
+            if (idx >= 0) findingsTable.setRowSelectionInterval(idx, idx)
+        }
+        findingsCount.text = "${findingsModel.rowCount} / ${findingsModel.all().size}"
     }
 
     /** Run [body] on a background thread with try/catch (Burp doesn't catch bg-thread exceptions). */
@@ -474,7 +638,7 @@ class MainTab(private val ctx: AppContext) {
                 com.authzmatrix.model.Severity.CRITICAL, I18n.t("finding.weakSecret.type"),
                 I18n.t("finding.weakSecret.summary", source, hit), null,
             )
-            recomputeFindings()
+            recomputeFindingsNow()
             JOptionPane.showMessageDialog(root, I18n.t("crack.weakDialog", hit),
                 I18n.t("crack.weakTitle"), JOptionPane.WARNING_MESSAGE)
             return
@@ -519,6 +683,10 @@ class MainTab(private val ctx: AppContext) {
     }
 
     // ---- renderer -------------------------------------------------------------
+
+    private class SeverityFilter(val severity: Severity?) {
+        override fun toString() = severity?.name ?: I18n.t("find.filterAll")
+    }
 
     /** Colours a cell by the (light pastel) colour returned by [colorOf] (null = default). */
     private class ColorRenderer(

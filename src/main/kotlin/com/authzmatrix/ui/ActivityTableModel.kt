@@ -16,7 +16,13 @@ class ActivityTableModel : AbstractTableModel() {
 
     fun add(e: ActivityEntry) {
         rows += e
-        fireTableRowsInserted(rows.size - 1, rows.size - 1)
+        val drop = rows.size - MAX_ROWS
+        if (drop > 0) {
+            rows.subList(0, drop).clear()
+            fireTableDataChanged()
+        } else {
+            fireTableRowsInserted(rows.size - 1, rows.size - 1)
+        }
     }
 
     fun clear() {
@@ -48,5 +54,10 @@ class ActivityTableModel : AbstractTableModel() {
             6 -> e.verdict?.name ?: ""
             else -> ""
         }
+    }
+
+    companion object {
+        /** Keep long audits responsive; older entries are dropped first. */
+        const val MAX_ROWS = 5_000
     }
 }

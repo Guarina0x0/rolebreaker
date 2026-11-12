@@ -51,4 +51,14 @@ class PersonaSyncTest {
         val admin = store.personas.first { !it.anonymous }
         assertTrue(admin.level < anon.level, "anonymous must rank below every authenticated role")
     }
+
+    @Test fun capturedTokenCatalogIsBounded() {
+        val store = PersonaStore()
+        val future = Instant.now().epochSecond + 3600
+        repeat(PersonaStore.MAX_CAPTURED_TOKENS + 5) { i ->
+            store.capture(tok("role$i", "sub$i", future), "src")
+        }
+        assertTrue(store.capturedTokens.size <= PersonaStore.MAX_CAPTURED_TOKENS)
+        assertTrue(store.capturedTokens.isNotEmpty())
+    }
 }

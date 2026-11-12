@@ -32,7 +32,7 @@ IDOR), while the one correctly-enforced endpoint (`POST …/delete`) stays **gre
 | **⚡ Auto sweep** | One click: scan, rank, test all recent requests with lower roles + anonymous |
 | **Continuous lower-priv mode** | Browse as admin — every new request is background-tested as lower roles |
 | **Access matrix** | Endpoint × persona, colour-coded verdict |
-| **Findings view** | Ranked, severity-coloured; only the interesting results |
+| **Findings view** | Ranked, filterable by text/severity; export CSV/JSON, copy as cURL, send to Repeater |
 | **JWT attacks** | `alg:none`, signature strip, role escalation — live verdict |
 | **HMAC weak-secret cracker** | Offline HS256/384/512 against a built-in list or your wordlist |
 | **IDOR / param tampering** | Numeric + UUID ids, cross-persona replay |
@@ -67,9 +67,9 @@ Requires JDK 17+. Uses the bundled Gradle wrapper — no Gradle install needed.
 ```
 
 Output: `build/libs/rolebreaker-0.1.0.jar`  
-(fat-jar; bundles Kotlin stdlib + org.json — Montoya API is provided by Burp at runtime)
+(fat-jar; bundles Kotlin stdlib, org.json and Gson — Montoya API is provided by Burp at runtime)
 
-Run the test suite (68 tests — JWT, verdict classification, IDOR, findings, privilege ranking):
+Run the test suite (82 tests — JWT, verdict classification, IDOR, findings, filters, export, privilege ranking):
 
 ```bash
 ./gradlew test
@@ -128,7 +128,8 @@ Enable **"Continuo ↓priv (fondo)"** in the toolbar. As you browse as a high-pr
 
 - **"Escanear HTTP history"** — scans Burp proxy history for JWTs (Authorization headers, cookies, bodies). Prompts for how far back to look.
 - **"Crear personas por rol"** — turns the catalog into personas (one per distinct role). Only the freshest valid token per role is kept.
-- **"Ordenar privilegios…"** — drag-and-drop form to set the privilege hierarchy (top = most privileged). The extension uses this to determine "lower" roles.
+- **"Fijar token…"** — paste/replace the selected persona's token without editing the read-only summary column.
+- **"Ordenar privilegios…"** — reorderable list (↑/↓ buttons) to set the privilege hierarchy (top = most privileged). The extension uses this to determine "lower" roles.
 - **"Refrescar caducados"** — force re-login of personas that have an assigned refresh request and an expired token.
 - **"Limpiar personas"** — wipe all personas (including any persisted from previous sessions).
 
@@ -163,7 +164,10 @@ The **⚠ Findings** tab surfaces only the interesting results, ranked by severi
 
 Severity is escalated automatically when the endpoint matches high-risk patterns (`/admin`, numeric IDs, UUIDs, `?id=` params).
 
-Select a finding to see its request/response.
+- **Filter** by free text (severity, type, detail, method, URL) and by severity.
+- **Export** the findings currently shown to CSV or JSON.
+- **Right-click a finding** → copy its request as a `cURL` command, or send it to Repeater.
+- Select a finding to see its request/response.
 
 ---
 
@@ -211,10 +215,11 @@ com.authzmatrix
 ├── AuthzMatrixExtension.kt
 ├── model/Models.kt
 ├── core/
+│   ├── AppContext.kt             # wiring, executor pool, auto-mode state
 │   ├── Jwt.kt                    # JWT parse, role extraction (incl. Keycloak realm_access.roles)
 │   ├── JwtForge.kt               # alg:none / strip / role-escalate
 │   ├── JwtCracker.kt             # offline HMAC brute-force
-│   ├── PersonaStore.kt           # personas + token catalog (thread-safe)
+│   ├── PersonaStore.kt           # personas + token catalog (thread-safe, bounded)
 │   ├── PersonaPersistence.kt     # Burp Preferences serialization (org.json, v2 key)
 │   ├── PrivilegeRanker.kt        # auto-ranks roles by name heuristic
 │   ├── TokenCapture.kt           # harvest JWTs from live traffic
@@ -224,10 +229,14 @@ com.authzmatrix
 │   ├── RefreshEngine.kt          # re-login via saved request
 │   ├── HistoryScanner.kt         # scan proxy history for JWTs
 │   ├── FindingsAnalyzer.kt       # derive ranked findings from matrix + activity
+│   ├── FindingsExport.kt         # findings → CSV / JSON
+│   ├── CurlBuilder.kt            # request → reproducible curl command
 │   ├── EndpointRisk.kt           # escalate severity for /admin, ids, UUIDs
 │   ├── IdorAnalyzer.kt           # detect numeric/UUID params
 │   ├── StaticAssets.kt           # filter static extensions
-│   └── AppContext.kt             # wiring, executor pool, auto-mode state
+│   ├── PayloadLibrary.kt         # bundled payload categories
+│   ├── DashboardModule.kt        # module contract + status chips
+│   └── ModuleRegistry.kt         # optional/private module hook
 ├── handler/
 │   ├── ProxyHttpHandler.kt       # auto-mode + token capture
 │   └── AuthzContextMenu.kt       # right-click menu
@@ -243,8 +252,16 @@ com.authzmatrix
     ├── PrivilegeOrderDialog.kt
     ├── RefreshAssignDialog.kt
     ├── IdorDialog.kt
-    └── JwtAttackDialog.kt
+    ├── JwtAttackDialog.kt
+    └── dashboard/
+        ├── DashboardTab.kt
+        ├── DashTheme.kt
+        ├── HomeModule.kt
+        ├── MatrixModule.kt
+        └── PayloadsModule.kt
 ```
+
+Optional modules can be registered through `core/ModuleRegistry.kt` without touching the shell.
 
 ---
 
@@ -252,8 +269,10 @@ com.authzmatrix
 
 - JWT signatures are **never validated** — the tool trusts whatever token you configure. The point is to test the *server's* enforcement.
 - The privilege auto-ranking heuristic is a starting point; always confirm via **"Ordenar privilegios…"**.
-- Auto-mode deduplication is by `method + URL`; parameterised endpoints with many IDs are only tested once per URL.
-- Results (matrix, activity, findings) are **in-memory** — reset on Burp restart. Export CSV/HTML to keep a snapshot.
+- Auto-mode deduplication is by the full `method + URL` (query included). The same URL with a different request body is tested only once.
+- Auto modes replay **every** in-scope request, including `POST`/`PUT`/`PATCH`/`DELETE`. Run them only against systems you are authorised to test, and be mindful of state-changing endpoints.
+- The activity log keeps the last 5,000 entries and the token catalog the last 1,000 tokens to keep long audits responsive.
+- Results (matrix, activity, findings) are **in-memory** — reset on Burp restart. Export the matrix (CSV/HTML) or the findings (CSV/JSON) to keep a snapshot.
 
 ---
 
