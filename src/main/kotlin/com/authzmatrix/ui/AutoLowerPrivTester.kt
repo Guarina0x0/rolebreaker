@@ -3,6 +3,10 @@ package com.authzmatrix.ui
 import burp.api.montoya.http.message.requests.HttpRequest
 import com.authzmatrix.core.AppContext
 import com.authzmatrix.core.I18n
+import com.authzmatrix.core.SweepProgress
+import com.authzmatrix.core.SweepToken
+import com.authzmatrix.core.TestOutcome
+import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JOptionPane
 
 /**
@@ -28,6 +32,53 @@ object AutoLowerPrivTester {
         if (tested == 0) {
             JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("lower.none"),
                 I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
+        }
+    }
+
+    /**
+     * Async sweep driver with progress and cancellation. [onProgress] and [onComplete] may be
+     * invoked from executor threads; the caller must marshal them to the EDT.
+     */
+    fun runAsync(
+        ctx: AppContext,
+        requests: List<HttpRequest>,
+        token: SweepToken,
+        onProgress: (SweepProgress) -> Unit,
+        onComplete: (SweepProgress) -> Unit,
+    ) {
+        val total = requests.size
+        val done = AtomicInteger()
+        val tested = AtomicInteger()
+        val errors = AtomicInteger()
+        val skipped = AtomicInteger()
+
+        fun snapshot() = SweepProgress(
+            total = total,
+            done = done.get(),
+            tested = tested.get(),
+            errors = errors.get(),
+            skipped = skipped.get(),
+        )
+
+        if (total == 0) {
+            val empty = snapshot()
+            onProgress(empty)
+            onComplete(empty)
+            return
+        }
+
+        for (req in requests) {
+            ctx.submitLowerPriv(req, token) { outcome ->
+                when (outcome) {
+                    TestOutcome.TESTED -> tested.incrementAndGet()
+                    TestOutcome.ERROR -> errors.incrementAndGet()
+                    TestOutcome.SKIPPED -> skipped.incrementAndGet()
+                }
+                val d = done.incrementAndGet()
+                val p = snapshot()
+                onProgress(p)
+                if (d == total) onComplete(p)
+            }
         }
     }
 }

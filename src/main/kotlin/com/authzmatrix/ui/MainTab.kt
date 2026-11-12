@@ -7,6 +7,8 @@ import com.authzmatrix.core.CurlBuilder
 import com.authzmatrix.core.FindingsExport
 import com.authzmatrix.core.I18n
 import com.authzmatrix.core.Jwt
+import com.authzmatrix.core.SweepProgress
+import com.authzmatrix.core.SweepToken
 import com.authzmatrix.model.Persona
 import com.authzmatrix.model.Severity
 import com.authzmatrix.model.TokenLocation
@@ -20,6 +22,8 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
 import javax.swing.BorderFactory
+import javax.swing.Box
+import javax.swing.BoxLayout
 import javax.swing.DefaultCellEditor
 import javax.swing.JButton
 import javax.swing.JCheckBox
@@ -31,6 +35,7 @@ import javax.swing.JMenuItem
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
+import javax.swing.JProgressBar
 import javax.swing.JScrollPane
 import javax.swing.JSplitPane
 import javax.swing.JTable
@@ -66,6 +71,15 @@ class MainTab(private val ctx: AppContext) {
     private val findingsTimer = javax.swing.Timer(250) { recomputeFindings() }.apply { isRepeats = false }
     private var updatingFindingsFilter = false
 
+    // Sweep progress bar (hidden when idle).
+    private val sweepBar = JPanel(BorderLayout(8, 0))
+    private val sweepProgress = JProgressBar()
+    private val sweepStatus = JLabel(" ")
+    private val sweepCancel = JButton()
+    private val sweepHideTimer = javax.swing.Timer(5_000) { sweepBar.isVisible = false }.apply { isRepeats = false }
+    private var activeSweep: SweepToken? = null
+    private var includeUnsafeCheck: JCheckBox? = null
+
     /** Findings not derivable from matrix/activity (e.g. a cracked HMAC secret). */
     private val manualFindings = ArrayList<com.authzmatrix.model.Finding>()
 
@@ -75,6 +89,7 @@ class MainTab(private val ctx: AppContext) {
     private val root = JPanel(BorderLayout())
 
     init {
+        configureSweepBar()
         wireListeners()
         buildUi()
 
@@ -118,6 +133,8 @@ class MainTab(private val ctx: AppContext) {
         catalogModel.structureChanged()
         buildToolbar()
         buildCenter()
+        sweepCancel.text = I18n.t("sweep.cancel")
+        root.add(sweepBar, BorderLayout.SOUTH)
         catalogModel.refresh()
         widenMatrix()
         root.revalidate()
@@ -146,6 +163,10 @@ class MainTab(private val ctx: AppContext) {
         }
         val capture = JCheckBox(I18n.t("tb.capture"), ctx.capture.enabled)
         capture.addActionListener { ctx.capture.enabled = capture.isSelected }
+        val includeUnsafe = JCheckBox(I18n.t("tb.includeUnsafe"), ctx.allowStateChanging.get())
+        includeUnsafe.toolTipText = I18n.t("tb.includeUnsafe.tip")
+        includeUnsafe.addActionListener { ctx.allowStateChanging.set(includeUnsafe.isSelected) }
+        includeUnsafeCheck = includeUnsafe
 
         val clearResults = JButton(I18n.t("tb.clearMatrix"))
         clearResults.addActionListener {
@@ -172,7 +193,7 @@ class MainTab(private val ctx: AppContext) {
         bar.add(sweep)
         bar.addSeparator()
         bar.add(JLabel(I18n.t("tb.mode")))
-        bar.add(auto); bar.add(lowerCont); bar.add(capture)
+        bar.add(auto); bar.add(lowerCont); bar.add(capture); bar.add(includeUnsafe)
         bar.addSeparator()
         bar.add(JLabel(I18n.t("tb.view")))
         bar.add(clearResults); bar.add(clearActivity)
@@ -540,11 +561,24 @@ class MainTab(private val ctx: AppContext) {
         }, name).start()
     }
 
+    private data class SweepOptions(
+        val minutes: Long,
+        val includeUnsafe: Boolean,
+        val collapseIds: Boolean,
+    )
+
     private fun autoSweep() {
-        val input = JOptionPane.showInputDialog(root, I18n.t("sweep.prompt"), "20") ?: return
-        val minutes = input.trim().toLongOrNull()?.coerceAtLeast(1) ?: 20L
+        if (activeSweep != null) {
+            JOptionPane.showMessageDialog(root, I18n.t("sweep.running"), I18n.t("sweep.title"),
+                JOptionPane.WARNING_MESSAGE)
+            return
+        }
+        val opts = showSweepOptions() ?: return
+        ctx.allowStateChanging.set(opts.includeUnsafe)
+        includeUnsafeCheck?.isSelected = opts.includeUnsafe
+
         bg("rolebreaker-auto-sweep") {
-            ctx.historyScanner.scan(minutes, true)
+            ctx.historyScanner.scan(opts.minutes, true)
             ctx.store.syncPersonasFromTokens()
             if (ctx.store.personas.any { !it.anonymous } && ctx.store.ensureAnonymousPersona()) {
                 ctx.api.logging().logToOutput(
@@ -553,26 +587,137 @@ class MainTab(private val ctx: AppContext) {
             }
             com.authzmatrix.core.PrivilegeRanker.assignLevels(ctx.store.personas)
             ctx.store.fireChanged() // persist levels + refresh UI
-            val reqs = ctx.historyScanner.recentRequests(minutes)
+
+            val all = ctx.historyScanner.recentRequests(opts.minutes, opts.collapseIds)
+            val targets = all.filter { ctx.isAutoTargetAllowed(it) }
+            val skipped = all.size - targets.size
+
             SwingUtilities.invokeLater {
                 catalogModel.refresh()
                 val roles = ctx.store.personas.filter { !it.anonymous }
                 if (roles.isEmpty()) {
-                    JOptionPane.showMessageDialog(root, I18n.t("sweep.noRoles", minutes),
+                    JOptionPane.showMessageDialog(root, I18n.t("sweep.noRoles", opts.minutes),
                         I18n.t("sweep.title"), JOptionPane.WARNING_MESSAGE)
                     return@invokeLater
                 }
-                if (reqs.isEmpty()) {
-                    JOptionPane.showMessageDialog(root, I18n.t("sweep.noReqs", minutes),
-                        I18n.t("sweep.title"), JOptionPane.WARNING_MESSAGE)
+                if (targets.isEmpty()) {
+                    val msg = if (skipped > 0) I18n.t("sweep.onlyUnsafe", skipped)
+                    else I18n.t("sweep.noReqs", opts.minutes)
+                    JOptionPane.showMessageDialog(root, msg, I18n.t("sweep.title"),
+                        JOptionPane.WARNING_MESSAGE)
                     return@invokeLater
                 }
-                com.authzmatrix.ui.AutoLowerPrivTester.run(ctx, reqs)
-                val order = ctx.store.personas.sortedBy { it.level }
-                    .joinToString(" > ") { "${it.name}(${it.level})" }
-                JOptionPane.showMessageDialog(root, I18n.t("sweep.launched", reqs.size, minutes, order),
-                    I18n.t("sweep.title"), JOptionPane.INFORMATION_MESSAGE)
+                confirmAndStart(targets, skipped, opts.minutes)
             }
+        }
+    }
+
+    private fun showSweepOptions(): SweepOptions? {
+        val minutes = JTextField("20", 6)
+        val includeUnsafe = JCheckBox(I18n.t("sweep.includeUnsafe"), ctx.allowStateChanging.get())
+        val collapse = JCheckBox(I18n.t("sweep.collapseIds"), true)
+
+        val panel = JPanel()
+        panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+        panel.add(JLabel(I18n.t("sweep.minutes")))
+        panel.add(minutes)
+        panel.add(Box.createVerticalStrut(8))
+        panel.add(includeUnsafe)
+        panel.add(collapse)
+        panel.add(Box.createVerticalStrut(8))
+        panel.add(JLabel(I18n.t("sweep.unsafeWarning")))
+
+        val ok = JOptionPane.showConfirmDialog(root, panel, I18n.t("sweep.title"),
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
+        if (ok != JOptionPane.OK_OPTION) return null
+        val mins = minutes.text.trim().toLongOrNull()?.coerceAtLeast(1) ?: 20L
+        return SweepOptions(mins, includeUnsafe.isSelected, collapse.isSelected)
+    }
+
+    private fun confirmAndStart(reqs: List<HttpRequest>, skipped: Int, minutes: Long) {
+        val text = JTextArea()
+        text.isEditable = false
+        text.isOpaque = false
+        text.lineWrap = true
+        text.wrapStyleWord = true
+        val scroll = JScrollPane(text)
+        scroll.preferredSize = java.awt.Dimension(560, 220)
+        val options = arrayOf(I18n.t("sweep.run"), I18n.t("btn.order"), I18n.t("sweep.cancel"))
+
+        fun hierarchy() = ctx.store.personas.sortedBy { it.level }
+            .joinToString(" > ") { "${it.name}(${it.level})" }
+        fun methods() = reqs.groupingBy { it.method() }.eachCount()
+            .entries.joinToString(", ") { "${it.key}: ${it.value}" }
+        fun message() = I18n.t("sweep.confirm", reqs.size, minutes, skipped, hierarchy(), methods())
+
+        text.text = message()
+        while (true) {
+            val choice = JOptionPane.showOptionDialog(
+                root, scroll, I18n.t("sweep.title"),
+                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                null, options, options[0],
+            )
+            when (choice) {
+                0 -> { startSweep(reqs); return }
+                1 -> { PrivilegeOrderDialog.open(ctx); text.text = message() }
+                else -> return
+            }
+        }
+    }
+
+    private fun startSweep(reqs: List<HttpRequest>) {
+        val token = SweepToken()
+        activeSweep = token
+        sweepHideTimer.stop()
+        sweepBar.isVisible = true
+        sweepProgress.minimum = 0
+        sweepProgress.maximum = reqs.size
+        sweepProgress.value = 0
+        sweepProgress.string = "0 / ${reqs.size}"
+        sweepStatus.text = I18n.t("sweep.progress", 0, reqs.size)
+        sweepCancel.isEnabled = true
+
+        AutoLowerPrivTester.runAsync(
+            ctx, reqs, token,
+            onProgress = { p -> SwingUtilities.invokeLater { if (activeSweep === token) updateSweepBar(p) } },
+            onComplete = { p -> SwingUtilities.invokeLater { finishSweepBar(token, p) } },
+        )
+    }
+
+    private fun updateSweepBar(p: SweepProgress) {
+        sweepProgress.maximum = maxOf(p.total, 1)
+        sweepProgress.value = p.done
+        sweepProgress.string = "${p.done} / ${p.total}"
+        sweepStatus.text = buildString {
+            append(I18n.t("sweep.progress", p.done, p.total))
+            if (p.errors > 0) append(" · ").append(I18n.t("sweep.errors", p.errors))
+            if (p.skipped > 0) append(" · ").append(I18n.t("sweep.skipped", p.skipped))
+        }
+    }
+
+    private fun finishSweepBar(token: SweepToken, p: SweepProgress) {
+        if (activeSweep !== token) return
+        activeSweep = null
+        sweepProgress.maximum = maxOf(p.total, 1)
+        sweepProgress.value = p.done
+        sweepProgress.string = "${p.done} / ${p.total}"
+        sweepStatus.text = I18n.t("sweep.done", p.tested, p.errors, p.skipped)
+        sweepCancel.isEnabled = false
+        sweepHideTimer.restart()
+        ctx.api.logging().logToOutput(I18n.t("sweep.doneLog", p.tested, p.errors, p.skipped))
+    }
+
+    private fun configureSweepBar() {
+        sweepProgress.isStringPainted = true
+        sweepBar.border = BorderFactory.createEmptyBorder(4, 8, 4, 8)
+        sweepBar.isVisible = false
+        sweepBar.add(sweepStatus, BorderLayout.WEST)
+        sweepBar.add(sweepProgress, BorderLayout.CENTER)
+        sweepBar.add(sweepCancel, BorderLayout.EAST)
+        sweepCancel.addActionListener {
+            activeSweep?.cancelled = true
+            sweepCancel.isEnabled = false
+            sweepStatus.text = I18n.t("sweep.cancelling")
         }
     }
 

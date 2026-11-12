@@ -29,7 +29,7 @@ IDOR), while the one correctly-enforced endpoint (`POST …/delete`) stays **gre
 |---------|-------------|
 | **JWT auto-discovery** | Scans proxy history + live traffic; no pasting |
 | **Persona auto-creation** | One persona per distinct role from captured tokens |
-| **⚡ Auto sweep** | One click: scan, rank, test all recent requests with lower roles + anonymous |
+| **⚡ Auto sweep** | One click: scan, rank, test recent requests with lower roles + anonymous, safely by default |
 | **Continuous lower-priv mode** | Browse as admin — every new request is background-tested as lower roles |
 | **Access matrix** | Endpoint × persona, colour-coded verdict |
 | **Findings view** | Ranked, filterable by text/severity; export CSV/JSON, copy as cURL, send to Repeater |
@@ -69,7 +69,7 @@ Requires JDK 17+. Uses the bundled Gradle wrapper — no Gradle install needed.
 Output: `build/libs/rolebreaker-0.1.0.jar`  
 (fat-jar; bundles Kotlin stdlib, org.json and Gson — Montoya API is provided by Burp at runtime)
 
-Run the test suite (82 tests — JWT, verdict classification, IDOR, findings, filters, export, privilege ranking):
+Run the test suite (92 tests — JWT, verdict classification, IDOR, findings, filters, export, sweep safety, privilege ranking):
 
 ```bash
 ./gradlew test
@@ -98,13 +98,14 @@ The UI loads in **English** by default. Use the **Language** selector on the far
 
 1. Log in as each role through Burp so their JWTs get captured automatically.
 2. In the **AuthZ Matrix** tab, click **⚡ Auto sweep**.
-3. Enter how many minutes of history to cover (default: 20).
+3. Choose the time window, whether to include **state-changing requests**, and whether to collapse numeric/UUID IDs.
 4. The extension:
    - Scans for active JWTs → auto-creates one persona per role
    - Adds an **anonymous** persona if none exists, so unauthenticated access is covered too
    - Auto-ranks privilege (admin/root/super > manager > user/member > guest/anon)
-   - Shows the detected hierarchy (most → least privileged)
-   - Tests every in-scope, non-static request from that window with the lower-privilege roles
+   - Skips `POST`/`PUT`/`PATCH`/`DELETE` and destructive paths (`/logout`, `/delete`, …) unless you opted in
+   - Shows a pre-run confirmation with request count, methods and hierarchy (with an **Order privileges** shortcut)
+   - Runs the tests with a live progress bar and a **Cancel** button
 5. Check the **⚠ Findings** tab.
 
 ### Option B — Manual / targeted
@@ -120,7 +121,7 @@ Right-click any request in Proxy history, Repeater, Target…
 
 ### Option C — Continuous lower-priv mode
 
-Enable **"Continuo ↓priv (fondo)"** in the toolbar. As you browse as a high-privilege user, every new in-scope request is automatically replayed in the background as the lower-privilege roles. Results appear live in the matrix and Findings tabs.
+Enable **"Continuo ↓priv (fondo)"** in the toolbar. As you browse as a high-privilege user, every new in-scope request is automatically replayed in the background as the lower-privilege roles. Safe methods only by default; enable **"Include state-changing"** if you need `POST`/`PUT`/`PATCH`/`DELETE` too. Results appear live in the matrix and Findings tabs.
 
 ---
 
@@ -232,6 +233,8 @@ com.authzmatrix
 │   ├── FindingsExport.kt         # findings → CSV / JSON
 │   ├── CurlBuilder.kt            # request → reproducible curl command
 │   ├── EndpointRisk.kt           # escalate severity for /admin, ids, UUIDs
+│   ├── EndpointKey.kt            # collapse /users/1 and /users/2 for sweeps
+│   ├── SweepPolicy.kt            # safe methods / destructive paths / sweep progress types
 │   ├── IdorAnalyzer.kt           # detect numeric/UUID params
 │   ├── StaticAssets.kt           # filter static extensions
 │   ├── PayloadLibrary.kt         # bundled payload categories
@@ -269,8 +272,8 @@ Optional modules can be registered through `core/ModuleRegistry.kt` without touc
 
 - JWT signatures are **never validated** — the tool trusts whatever token you configure. The point is to test the *server's* enforcement.
 - The privilege auto-ranking heuristic is a starting point; always confirm via **"Ordenar privilegios…"**.
-- Auto-mode deduplication is by the full `method + URL` (query included). The same URL with a different request body is tested only once.
-- Auto modes replay **every** in-scope request, including `POST`/`PUT`/`PATCH`/`DELETE`. Run them only against systems you are authorised to test, and be mindful of state-changing endpoints.
+- Auto modes are **safe by default**: they skip `POST`/`PUT`/`PATCH`/`DELETE` and destructive paths (`/logout`, `/delete`, …). Enable **"Include state-changing"** only if you accept that replaying can modify data.
+- Auto-mode deduplication is by the full `method + URL` (query included). Enable **"Treat /users/1 and /users/2 as one endpoint"** in the sweep dialog to collapse numeric/UUID IDs.
 - The activity log keeps the last 5,000 entries and the token catalog the last 1,000 tokens to keep long audits responsive.
 - Results (matrix, activity, findings) are **in-memory** — reset on Burp restart. Export the matrix (CSV/HTML) or the findings (CSV/JSON) to keep a snapshot.
 

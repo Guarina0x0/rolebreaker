@@ -34,8 +34,11 @@ class HistoryScanner(
         found
     }
 
-    /** Recent in-scope, non-static requests (deduped by method+URL) — the auto-sweep candidates. */
-    fun recentRequests(withinMinutes: Long): List<HttpRequest> {
+    /**
+     * Recent in-scope, non-static requests. With [collapseIds], `/users/1` and `/users/2` dedupe to
+     * the same endpoint key; callers still receive the first real request seen for that key.
+     */
+    fun recentRequests(withinMinutes: Long, collapseIds: Boolean = false): List<HttpRequest> {
         val cutoff = ZonedDateTime.now().minusMinutes(withinMinutes)
         val seen = HashSet<String>()
         val out = ArrayList<HttpRequest>()
@@ -45,7 +48,8 @@ class HistoryScanner(
             val r = item.finalRequest()
             if (!api.scope().isInScope(r.url())) continue
             if (StaticAssets.isStatic(r.url())) continue
-            if (seen.add("${r.method()} ${r.url()}")) out += r
+            val key = "${r.method()} ${if (collapseIds) EndpointKey.normalize(r.url()) else r.url()}"
+            if (seen.add(key)) out += r
         }
         return out
     }

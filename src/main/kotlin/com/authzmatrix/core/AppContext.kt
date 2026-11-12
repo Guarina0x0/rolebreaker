@@ -36,6 +36,9 @@ class AppContext(val api: MontoyaApi) {
      *  replayed in the background as the lower-privilege roles. */
     val autoLowerMode = AtomicBoolean(false)
 
+    /** Auto modes may replay POST/PUT/PATCH/DELETE only after an explicit opt-in. */
+    val allowStateChanging = AtomicBoolean(false)
+
     /** Endpoints already tested in each auto mode, so we don't retest on every hit. */
     private val seenInAuto = ConcurrentHashMap.newKeySet<String>()
     private val seenLower = ConcurrentHashMap.newKeySet<String>()
@@ -81,12 +84,24 @@ class AppContext(val api: MontoyaApi) {
     }
 
     /** Queue a request for replay against the given personas (default: all enabled). */
-    fun submitTest(req: HttpRequest, label: String? = null, personas: List<com.authzmatrix.model.Persona>? = null) {
+    fun submitTest(
+        req: HttpRequest,
+        label: String? = null,
+        personas: List<com.authzmatrix.model.Persona>? = null,
+        token: SweepToken? = null,
+        onDone: (TestOutcome) -> Unit = { _ -> },
+    ) {
         executor.submit {
+            if (token?.cancelled == true) {
+                onDone(TestOutcome.SKIPPED)
+                return@submit
+            }
             try {
                 rowSink(replay.test(req, label, personas ?: store.enabledPersonas()))
+                onDone(TestOutcome.TESTED)
             } catch (e: Exception) {
                 api.logging().logToError("Test failed: ${e.message}")
+                onDone(TestOutcome.ERROR)
             }
         }
     }
@@ -104,17 +119,21 @@ class AppContext(val api: MontoyaApi) {
 
     /** Auto-mode entry point (all personas): dedupes by method+URL before submitting. */
     fun autoTest(req: HttpRequest) {
-        if (!autoMode.get()) return
+        if (!autoMode.get() || !isAutoTargetAllowed(req)) return
         val key = "${req.method()} ${req.url()}"
         if (remember(seenInAuto, key)) submitTest(req)
     }
 
     /** Continuous lower-priv entry point: dedupes, then replays as the lower-privilege roles. */
     fun autoLowerTest(req: HttpRequest) {
-        if (!autoLowerMode.get()) return
+        if (!autoLowerMode.get() || !isAutoTargetAllowed(req)) return
         val key = "${req.method()} ${req.url()}"
         if (remember(seenLower, key)) submitLowerPriv(req)
     }
+
+    /** Automatic modes skip state-changing methods and destructive paths unless explicitly allowed. */
+    fun isAutoTargetAllowed(req: HttpRequest): Boolean =
+        allowStateChanging.get() || SweepPolicy.isSafe(req.method(), req.url())
 
     /** Bounded dedupe: after [MAX_SEEN] distinct URLs, reset rather than grow forever. */
     private fun remember(seen: MutableSet<String>, key: String): Boolean {
@@ -124,11 +143,22 @@ class AppContext(val api: MontoyaApi) {
 
     /** Replay [req] against the personas less privileged than its own identity. Returns true if it
      *  actually queued a test (i.e. the request's role was identified and has lower roles). */
-    fun submitLowerPriv(req: HttpRequest): Boolean {
+    fun submitLowerPriv(
+        req: HttpRequest,
+        token: SweepToken? = null,
+        onDone: (TestOutcome) -> Unit = { _ -> },
+    ): Boolean {
+        if (token?.cancelled == true) {
+            onDone(TestOutcome.SKIPPED)
+            return false
+        }
         val targets = lowerPrivTargets(req)
-        if (targets.isEmpty()) return false
+        if (targets.isEmpty()) {
+            onDone(TestOutcome.SKIPPED)
+            return false
+        }
         val label = "${com.authzmatrix.core.FindingsAnalyzer.LOWER_PRIV_MARKER} ${req.method()} ${req.pathWithoutQuery()}"
-        submitTest(req, label, targets)
+        submitTest(req, label, targets, token, onDone)
         return true
     }
 

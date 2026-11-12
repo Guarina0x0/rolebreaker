@@ -38,9 +38,11 @@ The demo lab is local-only and git-ignored: `cd demo-lab && node server.js` (por
 - `core/FindingsExport.kt` — serialises findings to CSV/JSON (used by the Findings tab).
 - `core/CurlBuilder.kt` — turns a request into a shell-ready `curl` command.
 - `core/AppContext.lowerPrivTargets` — decides which personas are "lower" than a request's role.
+- `core/SweepPolicy.kt` — safe-method/destructive-path policy, sweep token/outcome/progress types.
+- `core/EndpointKey.kt` — collapses numeric/UUID IDs for sweep deduplication.
 - `ui/DashboardTab.kt` — sidebar shell. Modules implement `core/DashboardModule`.
 - `ui/MainTab.kt` — the AuthZ Matrix module: personas, catalog, matrix, activity, findings
-  (search/severity filter, export, cURL/Repeater actions).
+  (search/severity filter, export, cURL/Repeater actions), plus sweep confirmation/progress.
 - `ui/dashboard/*Module.kt` — Home, Matrix, Payloads, and (private build) PwnDoc modules.
 - `handler/ProxyHttpHandler.kt` — captures traffic and drives auto modes.
 - `handler/AuthzContextMenu.kt` — right-click actions.
@@ -73,6 +75,11 @@ branch-specific. Do not add private PwnDoc references to shared files.
   header/cookie carrying a JWT, so cookie-based sessions don't leak into the anon replay.
 - **Expired tokens are never sent** for a non-anonymous persona; the replay engine skips them
   (and tries a configured refresh first).
+- **Auto modes are safe by default**: `SweepPolicy` skips POST/PUT/PATCH/DELETE and destructive
+  paths unless `AppContext.allowStateChanging` is enabled. Manual context-menu tests are not
+  restricted — the user explicitly chose that request.
+- **Sweep cancellation is cooperative**: `SweepToken.cancelled` prevents queued tasks from
+  starting; HTTP sends already in flight finish normally.
 - **All UI updates from background threads must go through `SwingUtilities.invokeLater`.**
 - **Findings recomputation is debounced** (250 ms Swing Timer) because a sweep emits many rows
   and activity entries; `recomputeFindingsNow()` is for explicit user actions (clear, crack).
