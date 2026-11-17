@@ -76,12 +76,13 @@ branch-specific. Do not add private PwnDoc references to shared files.
   discovered from JWTs can never produce the CRITICAL anonymous-access finding on their own.
   `TokenSwapper` strips `Authorization`, the configured auth header/cookie, and any other
   header/cookie carrying a JWT, so cookie-based sessions don't leak into the anon replay.
-- **Cookie personas** carry a `Persona.cookies` bundle and use `TokenLocation.COOKIE`. Identity
-  matching/dedupe uses stable cookies (`session`, `sid`, …) and deliberately excludes CSRF/XSRF;
-  the full bundle is still sent on replay. Custom opaque cookie names are manual (Set cookies /
-  Use session as persona). Opaque cookies have no expiry metadata, so they are refreshed only when
-  forced or when a JWT inside the bundle is expired. JWTs discovered inside cookies become cookie
-  personas in `syncPersonasFromTokens()` (same token, cookie bundle).
+- **Cookie personas** carry a `Persona.cookies` bundle and use `TokenLocation.COOKIE`. **Every**
+  cookie in the captured `Cookie` header is stored (`CookieHeader`), including custom names.
+  Identity matching/dedupe uses stable cookies (`session`, `sid`, …) and deliberately excludes
+  CSRF/XSRF; custom-only bundles fall back to the full cookie set. Opaque cookies have no expiry
+  metadata, so they are refreshed only when forced or when a JWT inside the bundle is expired.
+  JWTs discovered inside cookies become cookie personas in `syncPersonasFromTokens()` (same token,
+  cookie bundle). The persona name is user-defined (`From cookies…` / right-click session dialog).
 - **Expired tokens are never sent** for a non-anonymous persona; the replay engine skips them
   (and tries a configured refresh first).
 - **Auto modes are safe by default**: `SweepPolicy` skips POST/PUT/PATCH/DELETE and destructive

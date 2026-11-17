@@ -344,6 +344,9 @@ class MainTab(private val ctx: AppContext) {
         val remove = JButton(I18n.t("btn.remove")); remove.addActionListener {
             personaModel.personaAt(personaTable.selectedRow)?.let { ctx.store.removePersona(it) }
         }
+        val fromCookies = JButton(I18n.t("btn.fromCookies"))
+        fromCookies.toolTipText = I18n.t("btn.fromCookies.tip")
+        fromCookies.addActionListener { SessionPersonaDialog.openNew(ctx) }
         val setToken = JButton(I18n.t("btn.setToken"))
         setToken.toolTipText = I18n.t("btn.setToken.tip")
         setToken.addActionListener { setPersonaToken() }
@@ -364,7 +367,8 @@ class MainTab(private val ctx: AppContext) {
         val order = JButton(I18n.t("btn.order"))
         order.toolTipText = I18n.t("btn.order.tip")
         order.addActionListener { PrivilegeOrderDialog.open(ctx) }
-        personaBtns.add(add); personaBtns.add(remove); personaBtns.add(setToken)
+        personaBtns.add(add); personaBtns.add(remove); personaBtns.add(fromCookies)
+        personaBtns.add(setToken)
         personaBtns.add(setCookies)
         personaBtns.add(refreshExpired)
         personaBtns.add(clearPersonas); personaBtns.add(order)

@@ -108,6 +108,8 @@ object I18n {
         "btn.setToken.tip" to "Paste or replace the token of the selected persona",
         "btn.setCookies" to "Set cookies…",
         "btn.setCookies.tip" to "Edit the cookie bundle used by the selected persona",
+        "btn.fromCookies" to "From cookies…",
+        "btn.fromCookies.tip" to "Paste a Cookie header, name it and create a persona",
         "btn.refreshExpired" to "Refresh expired",
         "btn.refreshExpired.tip" to "Re-login personas with an expired token that have a refresh request configured",
         "btn.clearPersonas" to "Clear personas",
@@ -143,6 +145,7 @@ object I18n {
         "session.cookies" to "Cookies (Cookie header format):",
         "session.hint" to "<html><i>Paste/modify the cookie bundle; name=value; name2=value2</i></html>",
         "session.noCookies" to "This request has no Cookie header.",
+        "session.empty" to "Paste a Cookie header with at least one cookie.",
         "session.created" to "RoleBreaker: persona '%s' created from cookies.",
 
         "sweep.minutes" to "Use the last N minutes of history:",
@@ -425,6 +428,8 @@ object I18n {
         "btn.setToken.tip" to "Pega o reemplaza el token de la persona seleccionada",
         "btn.setCookies" to "Fijar cookies…",
         "btn.setCookies.tip" to "Edita el bundle de cookies de la persona seleccionada",
+        "btn.fromCookies" to "Desde cookies…",
+        "btn.fromCookies.tip" to "Pega una cabecera Cookie, ponle nombre y crea una persona",
         "btn.refreshExpired" to "Refrescar caducados",
         "btn.refreshExpired.tip" to "Re-login de las personas con token caducado que tengan refresh configurado",
         "btn.clearPersonas" to "Limpiar personas",
@@ -460,6 +465,7 @@ object I18n {
         "session.cookies" to "Cookies (formato cabecera Cookie):",
         "session.hint" to "<html><i>Pega/modifica el bundle; name=value; name2=value2</i></html>",
         "session.noCookies" to "Esta petición no tiene cabecera Cookie.",
+        "session.empty" to "Pega una cabecera Cookie con al menos una cookie.",
         "session.created" to "RoleBreaker: persona '%s' creada desde cookies.",
 
         "sweep.minutes" to "Usar los últimos N minutos del historial:",

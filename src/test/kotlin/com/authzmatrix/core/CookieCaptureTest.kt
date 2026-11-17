@@ -33,9 +33,10 @@ class CookieCaptureTest {
         assertEquals(2, store.capturedTokens.count { it.isCookie })
     }
 
-    @Test fun ignoresCookiesWithoutAuthMaterial() {
+    @Test fun capturesCustomCookieBundlesWithoutAuthNames() {
         val store = PersonaStore()
-        assertFalse(store.captureCookie(mapOf("lang" to "es", "theme" to "dark"), "src"))
-        assertTrue(store.capturedTokens.isEmpty())
+        assertTrue(store.captureCookie(mapOf("lang" to "es", "theme" to "dark"), "src"))
+        assertEquals(1, store.capturedTokens.count { it.isCookie })
+        assertEquals("dark", store.capturedTokens.single { it.isCookie }.cookies["theme"])
     }
 }

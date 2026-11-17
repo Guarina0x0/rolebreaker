@@ -54,7 +54,7 @@ class TokenCapture(private val store: PersonaStore) {
     }
 
     private fun captureCookies(cookies: Map<String, String>, where: String, onlyActive: Boolean): Int {
-        if (cookies.isEmpty() || !CookieSession.hasIdentityCookie(cookies)) return 0
+        if (cookies.isEmpty() || cookies.values.all { it.isBlank() }) return 0
         if (onlyActive) {
             val identity = CookieSession.identitySubset(cookies)
             val values = if (identity.isNotEmpty()) identity.values else cookies.values

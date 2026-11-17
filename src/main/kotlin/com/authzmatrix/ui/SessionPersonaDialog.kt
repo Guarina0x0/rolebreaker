@@ -18,9 +18,13 @@ import javax.swing.JTextArea
 import javax.swing.JTextField
 
 /**
- * "Use this session as persona": captures the Cookie header of the selected request as a
- * cookie-bundle persona. This is the quickest way to configure roles on apps that authenticate
- * with opaque session cookies instead of JWTs.
+ * Creates a cookie-bundle persona from all cookies in a Cookie header.
+ *
+ * - [open] takes the full Cookie header of a request (right-click action).
+ * - [openNew] lets the user paste the header manually and name the persona.
+ *
+ * The persona name is the role label (e.g. "userX"); the bundle is what gets replayed later when
+ * testing a request as another role.
  */
 object SessionPersonaDialog {
 
@@ -31,9 +35,15 @@ object SessionPersonaDialog {
                 I18n.t("session.title"), JOptionPane.WARNING_MESSAGE)
             return
         }
+        showDialog(ctx, cookies)
+    }
 
+    /** Paste a Cookie header manually and name the persona. */
+    fun openNew(ctx: AppContext) = showDialog(ctx, emptyMap())
+
+    private fun showDialog(ctx: AppContext, initial: Map<String, String>) {
         val name = JTextField("role${ctx.store.personas.count { !it.anonymous } + 1}", 24)
-        val area = JTextArea(CookieHeader.serialize(cookies), 5, 60)
+        val area = JTextArea(CookieHeader.serialize(initial), 5, 60)
         area.lineWrap = true
         area.wrapStyleWord = true
 
@@ -56,7 +66,7 @@ object SessionPersonaDialog {
 
         val parsed = CookieHeader.parse(area.text)
         if (parsed.isEmpty()) {
-            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("session.noCookies"),
+            JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("session.empty"),
                 I18n.t("session.title"), JOptionPane.WARNING_MESSAGE)
             return
         }

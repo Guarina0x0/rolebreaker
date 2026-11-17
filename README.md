@@ -131,7 +131,7 @@ Enable **"Continuo ↓priv (fondo)"** in the toolbar. As you browse as a high-pr
 Apps that use an opaque session cookie instead of a JWT are supported through **cookie bundles**:
 
 1. Log in as each role through Burp.
-2. Right-click an authenticated request → **"Use this session as persona…"**, or promote the captured session in **Discovered identities**.
+2. Right-click an authenticated request → **"Use this session as persona…"**, use **"From cookies…"** in the persona panel to paste a Cookie header and name it, or promote the captured session in **Discovered identities**.
 3. Give each persona a name and order the privilege hierarchy.
 4. Run **Auto sweep** or **test with lower privilege** as usual: requests are matched to the current persona by their cookies, and replayed with each persona's full cookie bundle (session + CSRF + related cookies).
 
@@ -145,6 +145,7 @@ Custom cookie names that the heuristic doesn't recognise can be added manually w
 - **"Crear personas por rol"** — turns discovered JWT roles into personas (one per distinct role). Only the freshest valid token per role is kept. Cookie sessions are promoted manually from the catalog or with the right-click action.
 - **"Fijar token…"** — paste/replace the selected persona's JWT/opaque token.
 - **"Fijar cookies…"** — edit the selected persona's full cookie bundle (`session=abc; csrf=xyz`).
+- **"Desde cookies…"** — paste a full `Cookie` header, name the persona (e.g. `userX`) and create it directly.
 - **"Ordenar privilegios…"** — reorderable list (↑/↓ buttons) to set the privilege hierarchy (top = most privileged). The extension uses this to determine "lower" roles.
 - **"Refrescar caducados"** — force re-login of personas that have an assigned refresh request and an expired token.
 - **"Limpiar personas"** — wipe all personas (including any persisted from previous sessions).
@@ -165,11 +166,12 @@ Shows every unique identity found in traffic: **JWTs** (deduplicated by `sub` + 
 ### Cookie sessions
 
 - Captured from request `Cookie` headers and response `Set-Cookie` headers (live traffic + history scan).
+- **All cookies in the `Cookie` header are preserved**, including custom names that don't look like a session; the bundle is replayed as-is.
 - A session is stored as the **full cookie bundle**, so CSRF and other related cookies travel with the identity.
 - JWTs found inside a cookie are automatically created as **cookie personas** (not bearer personas), so Spring Session / NextAuth-style apps work out of the box.
-- The catalog deduplicates by stable identity cookies (`session`, `PHPSESSID`, `sid`, …) and ignores rotating CSRF cookies for identity matching.
+- The catalog deduplicates by stable identity cookies (`session`, `PHPSESSID`, `sid`, …) and ignores rotating CSRF cookies for identity matching; custom-only bundles fall back to their full cookie set.
 - Replaying a cookie persona replaces the original auth cookies while keeping unrelated ones (locale, theme, …).
-- If your app uses a custom opaque cookie name the heuristic doesn't recognise, use **"Set cookies…"** or right-click a request → **"Use this session as persona…"**.
+- If your app uses a custom opaque cookie name the heuristic doesn't recognise, use **"Set cookies…"**, **"From cookies…"** or right-click a request → **"Use this session as persona…"**.
 
 ---
 
@@ -298,7 +300,7 @@ Optional modules can be registered through `core/ModuleRegistry.kt` without touc
 ## Limitations
 
 - JWT signatures are **never validated** — the tool trusts whatever token you configure. The point is to test the *server's* enforcement.
-- Cookie discovery uses a name heuristic (`session`, `PHPSESSID`, `sid`, `auth`, …). Custom opaque cookie names may need **"Set cookies…"** or the right-click **"Use this session as persona…"** action.
+- All cookies in the `Cookie` header are captured and replayed. Cookie discovery/dedupe uses stable names when available; custom-only bundles fall back to the full cookie set for matching.
 - Opaque cookie sessions have no expiry metadata; if one goes stale, assign a refresh request and use **"Test now"**, or replace the cookies manually.
 - Cookie bundles and JWTs are persisted in Burp Preferences in plain text, like the other captured tokens.
 - The privilege auto-ranking heuristic is a starting point; always confirm via **"Ordenar privilegios…"**.

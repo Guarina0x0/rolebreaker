@@ -116,9 +116,10 @@ class PersonaStore {
      */
     fun captureCookie(cookies: Map<String, String>, source: String): Boolean {
         if (cookies.isEmpty() || cookies.values.all { it.isBlank() }) return false
+        // Prefer stable identity cookies for dedupe; custom-only bundles fall back to all cookies
+        // so a Cookie header with no recognisable session name is still captured.
         val identity = CookieSession.identitySubset(cookies)
-        if (identity.isEmpty()) return false
-        val key = CookieHeader.canonical(identity)
+        val key = CookieHeader.canonical(if (identity.isNotEmpty()) identity else cookies)
 
         val idx = capturedTokens.indexOfFirst { it.isCookie && it.token == key }
         if (idx >= 0) {
