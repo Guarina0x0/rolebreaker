@@ -16,11 +16,9 @@ class JwtInfo(
     val signature: String,
 ) {
     val alg: String? = header.optString("alg", null)?.ifBlank { null }
-    val typ: String? = header.optString("typ", null)?.ifBlank { null }
 
     val sub: String? = payload.optString("sub", null)?.ifBlank { null }
     val issuer: String? = payload.optString("iss", null)?.ifBlank { null }
-    val audience: String? = stringify(payload.opt("aud"))
     val exp: Long? = (payload.opt("exp") as? Number)?.toLong()
 
     /** Best-effort owner: who this token belongs to. */
@@ -35,8 +33,6 @@ class JwtInfo(
     }
 
     fun expInstant(): Instant? = exp?.let { Instant.ofEpochSecond(it) }
-
-    val signed: Boolean get() = signature.isNotEmpty() && !alg.equals("none", ignoreCase = true)
 
     /** Short security assessment for the catalog. */
     fun securityNote(): String {

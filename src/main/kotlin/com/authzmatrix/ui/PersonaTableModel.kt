@@ -31,7 +31,8 @@ class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() 
     override fun isCellEditable(r: Int, c: Int): Boolean {
         if (c == TOKEN_COLUMN) return false
         // A cookie bundle is edited through the "Set cookies…" dialog, not this table.
-        if (c == 4 && store.personas[r].usesCookies && store.personas[r].cookies.isNotEmpty()) return false
+        val p = store.personas[r]
+        if (c == 4 && p.usesCookies && p.cookies.isNotEmpty()) return false
         return true
     }
 

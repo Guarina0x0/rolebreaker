@@ -35,7 +35,6 @@ object I18n {
     // ---- English (default) ----------------------------------------------------
 
     private val EN: Map<String, String> = mapOf(
-        "ext.name" to "RoleBreaker",
         "ext.load" to "RoleBreaker loaded. Configure personas, then right-click requests or enable Auto mode to build the access matrix.",
 
         // dashboard shell
@@ -164,11 +163,9 @@ object I18n {
         "sweep.running" to "A sweep is already running. Wait for it to finish or cancel it.",
         "sweep.onlyUnsafe" to "All %d recent request(s) were skipped by the safety policy (state-changing methods or destructive paths). Enable 'Include state-changing' if you really want to replay them.",
 
-        "sweep.prompt" to "Auto sweep — use the last N minutes of history:\nscans active JWTs, creates roles, ranks privileges automatically and tests\neach request with the LOWEST-privilege roles.",
         "sweep.noRoles" to "No roles with an active token were discovered in the last %d min.",
         "sweep.cookiesFound" to "Cookie sessions were discovered, but there are no roles yet.\nPromote a session in 'Discovered identities' or right-click a request → 'Use this session as persona…'.",
         "sweep.noReqs" to "No in-scope requests in the last %d min to test.",
-        "sweep.launched" to "Auto sweep launched over %d request(s) from the last %d min.\nDetected hierarchy (most → least priv): %s\nCheck the ⚠ Findings tab.",
         "sweep.title" to "Auto sweep",
 
         "scan.prompt" to "Scan identities (JWT + cookie sessions) from the last N minutes of history (active tokens only):",
@@ -194,7 +191,6 @@ object I18n {
         "finding.weakSecret.summary" to "Token secret cracked (%s): «%s» → the JWT is forgeable.",
 
         "export.error" to "Export error: %s",
-        "pwndoc.notLinked" to "This finding is not linked to a matrix row (send it from the matrix or the log).",
 
         // table headers — matrix
         "col.request" to "Request",
@@ -355,7 +351,6 @@ object I18n {
     // ---- Spanish --------------------------------------------------------------
 
     private val ES: Map<String, String> = mapOf(
-        "ext.name" to "RoleBreaker",
         "ext.load" to "RoleBreaker cargado. Configura personas y luego haz clic derecho en las peticiones o activa el modo Auto para construir la matriz de acceso.",
 
         // dashboard shell
@@ -484,11 +479,9 @@ object I18n {
         "sweep.running" to "Ya hay un barrido en curso. Espera a que termine o cancélalo.",
         "sweep.onlyUnsafe" to "Las %d peticiones recientes fueron omitidas por la política de seguridad (métodos que cambian estado o rutas destructivas). Activa 'Incluir cambio de estado' si realmente quieres reenviarlas.",
 
-        "sweep.prompt" to "Auto sweep — usa el historial de los últimos N minutos:\nescanea JWT activos, crea roles, ordena privilegios solo y prueba\ncada petición con los roles de MENOR privilegio.",
         "sweep.noRoles" to "No se descubrieron roles con token activo en los últimos %d min.",
         "sweep.cookiesFound" to "Se descubrieron sesiones por cookie, pero todavía no hay roles.\nPromociona una sesión en 'Identidades descubiertas' o haz clic derecho en una petición → 'Usar esta sesión como persona…'.",
         "sweep.noReqs" to "No hay peticiones in-scope en los últimos %d min para probar.",
-        "sweep.launched" to "Auto sweep lanzado sobre %d petición(es) de los últimos %d min.\nJerarquía detectada (más → menos priv): %s\nRevisa la pestaña ⚠ Findings.",
         "sweep.title" to "Auto sweep",
 
         "scan.prompt" to "Escanear identidades (JWT + sesiones por cookie) del historial de los últimos N minutos (solo tokens activos):",
@@ -514,7 +507,6 @@ object I18n {
         "finding.weakSecret.summary" to "Secreto del token crackeado (%s): «%s» → el JWT es forjable.",
 
         "export.error" to "Error exportando: %s",
-        "pwndoc.notLinked" to "Este finding no está ligado a una fila de la matriz (envíalo desde la matriz o el log).",
 
         // table headers — matrix
         "col.request" to "Request",

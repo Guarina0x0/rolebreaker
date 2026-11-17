@@ -4,7 +4,7 @@ package com.authzmatrix.core
 object StaticAssets {
 
     private val STATIC = Regex(
-        """\.(js|mjs|css|png|jpe?g|gif|svg|ico|webp|bmp|woff2?|ttf|eot|otf|pdf|zip|gz|map|mp4|webm|mp3)$""",
+        """\.(js|mjs|css|png|jpe?g|gif|svg|ico|webp|avif|heic|bmp|woff2?|ttf|eot|otf|pdf|zip|gz|map|mp4|webm|mp3|webmanifest|wasm)$""",
         RegexOption.IGNORE_CASE,
     )
 

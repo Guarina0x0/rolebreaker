@@ -74,9 +74,10 @@ object PersonaPersistence {
             o.put("cookieName", p.cookieName)
             o.put("anonymous", p.anonymous)
             o.put("enabled", p.enabled)
-            if (p.cookies.isNotEmpty()) {
+            val cookieSnapshot = synchronized(p) { LinkedHashMap(p.cookies) }
+            if (cookieSnapshot.isNotEmpty()) {
                 val cookies = JSONObject()
-                p.cookies.forEach { (name, value) -> cookies.put(name, value) }
+                cookieSnapshot.forEach { (name, value) -> cookies.put(name, value) }
                 o.put("cookies", cookies)
             }
             p.ownerSub?.let { o.put("ownerSub", it) }

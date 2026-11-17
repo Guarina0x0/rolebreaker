@@ -6,7 +6,7 @@ import com.authzmatrix.model.Severity
 object EndpointRisk {
 
     private val PRIVILEGED = Regex("""/(admin|internal|manage|management|console|config|debug|actuator)(/|$)""", RegexOption.IGNORE_CASE)
-    private val NUMERIC_ID = Regex("""/\d{2,}(/|$|\?)""")
+    private val NUMERIC_ID = Regex("""/\d+(/|$|\?)""")
     private val UUID = Regex("""[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}""")
     private val IDOR_PARAM = Regex("""[?&](id|user_?id|account(_?id)?|uid|pid|customer(_?id)?|order(_?id)?)=""", RegexOption.IGNORE_CASE)
     private val NUMERIC_PARAM = Regex("""[?&][a-z_]+=\d{2,}""", RegexOption.IGNORE_CASE)

@@ -409,7 +409,7 @@ class MainTab(private val ctx: AppContext) {
     private fun widenMatrix() {
         val cm = matrixTable.columnModel
         if (cm.columnCount > 0) cm.getColumn(0).preferredWidth = 300
-        if (cm.columnCount > 1) cm.getColumn(1).preferredWidth = 50
+        if (cm.columnCount > 1) cm.getColumn(1).preferredWidth = 90
         for (i in 2 until cm.columnCount) cm.getColumn(i).preferredWidth = 95
     }
 

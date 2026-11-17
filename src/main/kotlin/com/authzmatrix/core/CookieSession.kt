@@ -112,8 +112,6 @@ object CookieSession {
         return out
     }
 
-    fun hasIdentityCookie(cookies: Map<String, String>): Boolean = identitySubset(cookies).isNotEmpty()
-
     /** Best matching persona for the request's cookies (most matching auth cookies wins). */
     fun matchPersona(requestCookies: Map<String, String>, personas: List<Persona>): Persona? {
         val best = personas.asSequence()
@@ -129,8 +127,9 @@ object CookieSession {
 
         // Legacy single-cookie persona (cookieName + token, no bundle).
         return personas.firstOrNull { persona ->
-            !persona.anonymous && persona.usesCookies && persona.cookies.isEmpty() &&
-                requestCookies[persona.cookieName] == persona.token
+            if (persona.anonymous || !persona.usesCookies) return@firstOrNull false
+            val (cookies, token) = synchronized(persona) { LinkedHashMap(persona.cookies) to persona.token }
+            cookies.isEmpty() && requestCookies[persona.cookieName] == token
         }
     }
 

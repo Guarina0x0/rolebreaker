@@ -84,7 +84,7 @@ class ReplayEngine(
             val rr = safeSend(swapped)
             val resp = rr?.response()
             val result = if (resp == null) {
-                AccessResult(p.id, -1, 0, Verdict.ERROR, rr, "no response")
+                AccessResult(p.id, -1, 0, Verdict.ERROR, rr)
             } else {
                 val body = resp.bodyToString()
                 AccessResult(

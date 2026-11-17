@@ -88,7 +88,9 @@ class AppContext(val api: MontoyaApi) {
             }
 
             val cur = Jwt.parse(p.token)
-            if (!force && cur != null && !cur.isExpired()) return false
+            // Opaque tokens have no expiry metadata: don't hammer the refresh endpoint on every
+            // replay, only refresh when forced or when a JWT is actually expired.
+            if (!force && (cur == null || !cur.isExpired())) return false
             val tok = refreshEngine.refresh(p) ?: return false
             if (tok == p.token) return false
             p.token = tok

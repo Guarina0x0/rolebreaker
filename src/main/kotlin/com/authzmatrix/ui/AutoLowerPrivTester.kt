@@ -6,6 +6,7 @@ import com.authzmatrix.core.I18n
 import com.authzmatrix.core.SweepProgress
 import com.authzmatrix.core.SweepToken
 import com.authzmatrix.core.TestOutcome
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JOptionPane
 
@@ -51,6 +52,7 @@ object AutoLowerPrivTester {
         val tested = AtomicInteger()
         val errors = AtomicInteger()
         val skipped = AtomicInteger()
+        val completed = AtomicBoolean(false)
 
         fun snapshot() = SweepProgress(
             total = total,
@@ -60,24 +62,36 @@ object AutoLowerPrivTester {
             skipped = skipped.get(),
         )
 
+        fun complete(p: SweepProgress) {
+            if (completed.compareAndSet(false, true)) onComplete(p)
+        }
+
         if (total == 0) {
             val empty = snapshot()
             onProgress(empty)
-            onComplete(empty)
+            complete(empty)
             return
         }
 
         for (req in requests) {
-            ctx.submitLowerPriv(req, token) { outcome ->
-                when (outcome) {
-                    TestOutcome.TESTED -> tested.incrementAndGet()
-                    TestOutcome.ERROR -> errors.incrementAndGet()
-                    TestOutcome.SKIPPED -> skipped.incrementAndGet()
+            try {
+                ctx.submitLowerPriv(req, token) { outcome ->
+                    when (outcome) {
+                        TestOutcome.TESTED -> tested.incrementAndGet()
+                        TestOutcome.ERROR -> errors.incrementAndGet()
+                        TestOutcome.SKIPPED -> skipped.incrementAndGet()
+                    }
+                    val d = done.incrementAndGet()
+                    val p = snapshot()
+                    onProgress(p)
+                    if (d == total) complete(p)
                 }
+            } catch (_: Exception) {
+                errors.incrementAndGet()
                 val d = done.incrementAndGet()
                 val p = snapshot()
                 onProgress(p)
-                if (d == total) onComplete(p)
+                if (d == total) complete(p)
             }
         }
     }

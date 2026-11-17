@@ -75,7 +75,7 @@ class MatrixTableModel(private val store: PersonaStore) : AbstractTableModel() {
         val row = rows[rowIndex]
         return when (col) {
             0 -> row.label
-            1 -> if (row.baselineStatus > 0) row.baselineStatus.toString() else "-"
+            1 -> row.baselineText()
             else -> resultAt(rowIndex, col)?.cellText() ?: "-"
         }
     }
@@ -91,7 +91,7 @@ class MatrixTableModel(private val store: PersonaStore) : AbstractTableModel() {
         rows.forEach { row ->
             val cells = ArrayList<String>()
             cells += row.label
-            cells += if (row.baselineStatus > 0) row.baselineStatus.toString() else "-"
+            cells += row.baselineText()
             personaCols.forEach { p ->
                 val res = row.results[p.id]
                 cells += if (res == null) "-" else "${res.cellText()} ${res.verdict}"
@@ -112,7 +112,7 @@ class MatrixTableModel(private val store: PersonaStore) : AbstractTableModel() {
         sb.append("</tr>")
         rows.forEach { row ->
             sb.append("<tr><td>").append(esc(row.label)).append("</td>")
-            sb.append("<td>").append(if (row.baselineStatus > 0) row.baselineStatus else "-").append("</td>")
+            sb.append("<td>").append(esc(row.baselineText())).append("</td>")
             personaCols.forEach { p ->
                 val res = row.results[p.id]
                 if (res == null) {

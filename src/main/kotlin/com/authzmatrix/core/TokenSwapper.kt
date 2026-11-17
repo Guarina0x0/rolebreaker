@@ -78,7 +78,7 @@ object TokenSwapper {
         val names = req.headers()
             .filter { h ->
                 !h.name().equals("Cookie", ignoreCase = true) &&
-                    !h.name().equals(keep, ignoreCase = true) &&
+                    (keep == null || !h.name().equals(keep, ignoreCase = true)) &&
                     Jwt.findAll(h.value()).isNotEmpty()
             }
             .map { it.name() }

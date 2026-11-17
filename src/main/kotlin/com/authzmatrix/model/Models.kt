@@ -58,20 +58,8 @@ class Persona(
     /** Privilege level: lower number = more privileged. Used by the auto "lower-privilege" test. */
     var level: Int = 0
 
-    /** Stable per-persona colour for the matrix header. */
-    val color: Color = PALETTE[id % PALETTE.size]
-
     companion object {
         private val nextId = AtomicInteger(1)
-
-        private val PALETTE = arrayOf(
-            Color(0x2E, 0x7D, 0x32), // green
-            Color(0x15, 0x65, 0xC0), // blue
-            Color(0x6A, 0x1B, 0x9A), // purple
-            Color(0xEF, 0x6C, 0x00), // orange
-            Color(0x00, 0x83, 0x8F), // teal
-            Color(0xAD, 0x14, 0x57), // pink
-        )
     }
 }
 
@@ -109,7 +97,6 @@ class AccessResult(
     val bodyLength: Int,
     val verdict: Verdict,
     val requestResponse: HttpRequestResponse?,
-    val error: String? = null,
     /** Hash of the response body, for exact cross-persona comparison (all-vs-all). */
     val bodyHash: Int = 0,
 ) {
@@ -130,7 +117,11 @@ class MatrixRow(
     val baselineStatus: Int,
     val baselineLength: Int,
     val results: MutableMap<Int, AccessResult> = LinkedHashMap(),
-)
+) {
+    /** Base cell text, e.g. `200 · 1.2 KB` (or `-` when the baseline failed). */
+    fun baselineText(): String =
+        if (baselineStatus > 0) "$baselineStatus · ${humanBytes(baselineLength)}" else "-"
+}
 
 enum class Severity {
     CRITICAL, HIGH, MEDIUM, LOW;

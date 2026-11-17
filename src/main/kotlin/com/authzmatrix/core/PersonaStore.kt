@@ -85,6 +85,9 @@ class PersonaStore {
         if (info?.sub != null && !info.isExpired()) {
             for (p in personas) {
                 if (p.anonymous || p.token == token) continue
+                // Cookie-bundle personas are maintained by captureCookie/sync; don't overwrite
+                // their (unused) token field with a JWT found inside a cookie.
+                if (p.usesCookies && synchronized(p) { p.cookies.isNotEmpty() }) continue
                 // Match on the persona's known sub, falling back to its current token's sub
                 // (so promoted/seeded personas without a stored ownerSub still refresh).
                 val cur = Jwt.parse(p.token)

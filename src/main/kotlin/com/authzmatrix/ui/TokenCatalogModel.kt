@@ -23,7 +23,7 @@ class TokenCatalogModel(private val store: PersonaStore) : AbstractTableModel() 
     /** One row per identity (JWT sub+role, or cookie session), freshest first. */
     fun refresh() {
         data = store.capturedTokens
-            .filter { it.isCookie || (it.info != null && !it.info!!.isExpired()) }
+            .filter { t -> t.isCookie || t.info?.isExpired() == false }
             .groupBy { identityKey(it) }
             .map { (_, toks) ->
                 toks.maxByOrNull { t -> if (t.isCookie) Long.MAX_VALUE else t.info?.exp ?: 0L }!!

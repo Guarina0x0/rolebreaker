@@ -41,9 +41,8 @@ class TokenCapture(private val store: PersonaStore) {
         return n
     }
 
-    /** Scan a raw HTTP message blob and record any JWTs found. Returns count of new tokens.
-     *  With [onlyActive], expired tokens are ignored (used by the history scan). */
-    fun harvest(blob: String, where: String, onlyActive: Boolean = false): Int {
+    /** Scan a raw HTTP message blob and record any JWTs found. */
+    private fun harvest(blob: String, where: String, onlyActive: Boolean = false): Int {
         var n = 0
         for (tok in Jwt.findAll(blob)) {
             val info = Jwt.parse(tok) ?: continue

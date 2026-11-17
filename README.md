@@ -72,7 +72,7 @@ Requires JDK 17+. Uses the bundled Gradle wrapper — no Gradle install needed.
 Output: `build/libs/rolebreaker-0.1.0.jar`  
 (fat-jar; bundles Kotlin stdlib, org.json and Gson — Montoya API is provided by Burp at runtime)
 
-Run the test suite (112 tests — JWT, cookie sessions, verdict classification, IDOR, findings, filters, export, sweep safety, privilege ranking):
+Run the test suite (114 tests — JWT, cookie sessions, verdict classification, IDOR, findings, filters, export, sweep safety, privilege ranking):
 
 ```bash
 ./gradlew test
