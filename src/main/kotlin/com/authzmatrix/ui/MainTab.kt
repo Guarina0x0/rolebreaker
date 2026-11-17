@@ -3,6 +3,7 @@ package com.authzmatrix.ui
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.ui.editor.EditorOptions
 import com.authzmatrix.core.AppContext
+import com.authzmatrix.core.CookieHeader
 import com.authzmatrix.core.CurlBuilder
 import com.authzmatrix.core.FindingsExport
 import com.authzmatrix.core.I18n
@@ -346,6 +347,9 @@ class MainTab(private val ctx: AppContext) {
         val setToken = JButton(I18n.t("btn.setToken"))
         setToken.toolTipText = I18n.t("btn.setToken.tip")
         setToken.addActionListener { setPersonaToken() }
+        val setCookies = JButton(I18n.t("btn.setCookies"))
+        setCookies.toolTipText = I18n.t("btn.setCookies.tip")
+        setCookies.addActionListener { setPersonaCookies() }
         val refreshExpired = JButton(I18n.t("btn.refreshExpired"))
         refreshExpired.toolTipText = I18n.t("btn.refreshExpired.tip")
         refreshExpired.addActionListener { ctx.refreshAllExpired() }
@@ -361,6 +365,7 @@ class MainTab(private val ctx: AppContext) {
         order.toolTipText = I18n.t("btn.order.tip")
         order.addActionListener { PrivilegeOrderDialog.open(ctx) }
         personaBtns.add(add); personaBtns.add(remove); personaBtns.add(setToken)
+        personaBtns.add(setCookies)
         personaBtns.add(refreshExpired)
         personaBtns.add(clearPersonas); personaBtns.add(order)
         val personaBox = JPanel(BorderLayout())
@@ -370,7 +375,7 @@ class MainTab(private val ctx: AppContext) {
         // Token catalog.
         catalogTable.selectionMode(ListSelectionModel.SINGLE_SELECTION)
         catalogTable.autoResizeMode = JTable.AUTO_RESIZE_OFF
-        applyWidths(catalogTable, intArrayOf(90, 150, 150, 60, 160, 230, 220))
+        applyWidths(catalogTable, intArrayOf(60, 80, 140, 140, 55, 150, 220, 200))
         val catalogScroll = JScrollPane(catalogTable)
         catalogScroll.border = BorderFactory.createTitledBorder(I18n.t("cfg.catalog"))
         val catalogBtns = JPanel(FlowLayout(FlowLayout.LEFT))
@@ -512,8 +517,41 @@ class MainTab(private val ctx: AppContext) {
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return
 
         val token = area.text.trim().removePrefix("Bearer ").removePrefix("bearer ").trim()
-        persona.token = token
-        persona.ownerSub = Jwt.parse(token)?.sub
+        synchronized(persona) {
+            persona.token = token
+            persona.cookies.clear() // a token replaces any previous cookie bundle
+            persona.ownerSub = Jwt.parse(token)?.sub
+        }
+        ctx.store.fireChanged()
+    }
+
+    /** Edit a full Cookie header bundle for the selected persona. */
+    private fun setPersonaCookies() {
+        val persona = personaModel.personaAt(personaTable.selectedRow)
+        if (persona == null) {
+            JOptionPane.showMessageDialog(root, I18n.t("setCookies.noPersona"), I18n.t("dlg.title"),
+                JOptionPane.WARNING_MESSAGE)
+            return
+        }
+        val area = JTextArea(CookieHeader.serialize(persona.cookies), 5, 60)
+        area.lineWrap = true
+        area.wrapStyleWord = true
+        val panel = JPanel(BorderLayout(0, 6))
+        panel.add(JLabel(I18n.t("setCookies.persona", persona.name)), BorderLayout.NORTH)
+        panel.add(JScrollPane(area), BorderLayout.CENTER)
+        panel.add(JLabel(I18n.t("setCookies.hint")), BorderLayout.SOUTH)
+
+        if (JOptionPane.showConfirmDialog(root, panel, I18n.t("setCookies.title"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return
+
+        val parsed = CookieHeader.parse(area.text)
+        synchronized(persona) {
+            persona.cookies.clear()
+            persona.cookies.putAll(parsed)
+            persona.location = TokenLocation.COOKIE
+            persona.token = ""
+            persona.ownerSub = null
+        }
         ctx.store.fireChanged()
     }
 
@@ -596,8 +634,13 @@ class MainTab(private val ctx: AppContext) {
                 catalogModel.refresh()
                 val roles = ctx.store.personas.filter { !it.anonymous }
                 if (roles.isEmpty()) {
-                    JOptionPane.showMessageDialog(root, I18n.t("sweep.noRoles", opts.minutes),
-                        I18n.t("sweep.title"), JOptionPane.WARNING_MESSAGE)
+                    val msg = if (ctx.store.capturedTokens.any { it.isCookie }) {
+                        I18n.t("sweep.cookiesFound")
+                    } else {
+                        I18n.t("sweep.noRoles", opts.minutes)
+                    }
+                    JOptionPane.showMessageDialog(root, msg, I18n.t("sweep.title"),
+                        JOptionPane.WARNING_MESSAGE)
                     return@invokeLater
                 }
                 if (targets.isEmpty()) {
@@ -754,8 +797,17 @@ class MainTab(private val ctx: AppContext) {
 
     private fun promoteToken() {
         val t = catalogModel.tokenAt(catalogTable.selectedRow) ?: return
-        val name = t.info?.role ?: t.info?.owner ?: "token"
-        ctx.store.addPersona(Persona(name = name, token = t.token, ownerSub = t.info?.sub))
+        if (t.isCookie) {
+            val suggested = "cookie${ctx.store.personas.count { it.usesCookies } + 1}"
+            val name = JOptionPane.showInputDialog(root, I18n.t("cookie.personaName"), suggested) ?: return
+            if (name.isBlank()) return
+            val p = Persona(name = name.trim(), location = TokenLocation.COOKIE)
+            p.cookies.putAll(t.cookies)
+            ctx.store.addPersona(p)
+        } else {
+            val name = t.info?.role ?: t.info?.owner ?: "token"
+            ctx.store.addPersona(Persona(name = name, token = t.token, ownerSub = t.info?.sub))
+        }
     }
 
     private fun crackSelected() {
@@ -763,6 +815,11 @@ class MainTab(private val ctx: AppContext) {
         if (t == null) {
             JOptionPane.showMessageDialog(root, I18n.t("crack.selectToken"), I18n.t("crack.title"),
                 JOptionPane.WARNING_MESSAGE)
+            return
+        }
+        if (t.isCookie) {
+            JOptionPane.showMessageDialog(root, I18n.t("crack.notJwt"), I18n.t("crack.title"),
+                JOptionPane.INFORMATION_MESSAGE)
             return
         }
         if (!com.authzmatrix.core.JwtCracker.isHmac(t.info?.alg)) {

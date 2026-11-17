@@ -4,22 +4,41 @@ import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.http.message.responses.HttpResponse
 
 /**
- * Harvests JWTs from traffic (headers, cookies, bodies) so the user never pastes tokens.
- * Used both by the live proxy handler and the on-demand history scanner.
+ * Harvests JWTs and cookie sessions from traffic (headers, cookies, bodies) so the user never
+ * pastes credentials by hand. Used both by the live proxy handler and the on-demand history
+ * scanner.
  */
 class TokenCapture(private val store: PersonaStore) {
 
     @Volatile
     var enabled: Boolean = true
 
-    fun inspectRequest(req: HttpRequest) {
-        if (!enabled) return
-        harvest(req.toString(), "req ${req.method()} ${req.path()}")
+    /** Returns the number of new identities (JWT or cookie session) discovered. */
+    fun inspectRequest(req: HttpRequest, onlyActive: Boolean = false): Int {
+        if (!enabled) return 0
+        val where = "req ${req.method()} ${req.path()}"
+        var n = harvest(req.toString(), where, onlyActive)
+        n += captureCookies(CookieHeader.parse(req.headerValue("Cookie")), where, onlyActive)
+        return n
     }
 
-    fun inspectResponse(resp: HttpResponse, where: String) {
-        if (!enabled) return
-        harvest(resp.toString(), "resp $where")
+    /** Returns the number of new identities (JWT or cookie session) discovered. */
+    fun inspectResponse(resp: HttpResponse, where: String, onlyActive: Boolean = false): Int {
+        if (!enabled) return 0
+        var n = harvest(resp.toString(), "resp $where", onlyActive)
+        val setCookies = resp.headers()
+            .filter { it.name().equals("Set-Cookie", ignoreCase = true) }
+            .map { it.value() }
+        val cookies = CookieHeader.fromSetCookieHeaders(setCookies).ifEmpty {
+            CookieHeader.fromSetCookieHeaders(
+                resp.toString().lineSequence()
+                    .filter { it.startsWith("Set-Cookie:", ignoreCase = true) }
+                    .map { it.substringAfter(':').trim() }
+                    .toList(),
+            )
+        }
+        n += captureCookies(cookies, "resp $where", onlyActive)
+        return n
     }
 
     /** Scan a raw HTTP message blob and record any JWTs found. Returns count of new tokens.
@@ -32,5 +51,15 @@ class TokenCapture(private val store: PersonaStore) {
             if (store.capture(tok, where)) n++
         }
         return n
+    }
+
+    private fun captureCookies(cookies: Map<String, String>, where: String, onlyActive: Boolean): Int {
+        if (cookies.isEmpty() || !CookieSession.hasIdentityCookie(cookies)) return 0
+        if (onlyActive) {
+            val identity = CookieSession.identitySubset(cookies)
+            val values = if (identity.isNotEmpty()) identity.values else cookies.values
+            if (values.any { Jwt.parse(it)?.isExpired() == true }) return 0
+        }
+        return if (store.captureCookie(cookies, where)) 1 else 0
     }
 }

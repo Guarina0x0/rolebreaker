@@ -14,14 +14,35 @@ class RefreshEngine(private val api: MontoyaApi) {
     /** Returns the fresh token, or null if the refresh failed / yielded nothing. */
     fun refresh(p: Persona): String? {
         val req = p.refreshRequest ?: return null
-        val resp = try {
+        val resp = send(req, p) ?: return null
+        return extract(resp, p.refreshTokenField)
+    }
+
+    /** Returns the cookies set by the refresh response, or null if there were none. */
+    fun refreshCookies(p: Persona): Map<String, String>? {
+        val req = p.refreshRequest ?: return null
+        val resp = send(req, p) ?: return null
+        val setCookies = resp.headers()
+            .filter { it.name().equals("Set-Cookie", ignoreCase = true) }
+            .map { it.value() }
+        val cookies = CookieHeader.fromSetCookieHeaders(setCookies).ifEmpty {
+            CookieHeader.fromSetCookieHeaders(
+                resp.toString().lineSequence()
+                    .filter { it.startsWith("Set-Cookie:", ignoreCase = true) }
+                    .map { it.substringAfter(':').trim() }
+                    .toList(),
+            )
+        }
+        return cookies.ifEmpty { null }
+    }
+
+    private fun send(req: burp.api.montoya.http.message.requests.HttpRequest, p: Persona): HttpResponse? =
+        try {
             api.http().sendRequest(req).response()
         } catch (e: Exception) {
             api.logging().logToError("RoleBreaker: refresh of '${p.name}' failed: ${e.message}")
-            return null
-        } ?: return null
-        return extract(resp, p.refreshTokenField)
-    }
+            null
+        }
 
     private fun extract(resp: HttpResponse, field: String?): String? {
         if (!field.isNullOrBlank()) {

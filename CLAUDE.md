@@ -29,8 +29,10 @@ The demo lab is local-only and git-ignored: `cd demo-lab && node server.js` (por
 - `core/AppContext.kt` — wiring + 4-thread executor + auto-mode flags/dedup + persona refresh.
 - `core/PersonaStore.kt` — thread-safe personas + captured-token catalog + persona sync.
 - `core/PersonaPersistence.kt` — persistence in Burp Preferences (`authz.personas.v2`).
-- `core/TokenCapture.kt` / `HistoryScanner.kt` — JWT discovery from live traffic / proxy history.
-- `core/TokenSwapper.kt` — inject or strip a persona's token (Bearer header, custom header, cookie).
+- `core/TokenCapture.kt` / `HistoryScanner.kt` — JWT and cookie-session discovery from live traffic / proxy history.
+- `core/TokenSwapper.kt` — inject or strip a persona's JWT/header/cookie bundle.
+- `core/CookieSession.kt` — Cookie-header parsing, auth/identity-cookie heuristics, bundle replacement
+  and cookie-based persona matching.
 - `core/ReplayEngine.kt` — baseline + per-persona replay; emits `ActivityEntry` lines.
 - `core/EnforcementDetector.kt` — response → `Verdict` (normalisation, deny/login walls,
   baseline comparison, and `classifyStandalone` for forged-token probes).
@@ -43,6 +45,7 @@ The demo lab is local-only and git-ignored: `cd demo-lab && node server.js` (por
 - `ui/DashboardTab.kt` — sidebar shell. Modules implement `core/DashboardModule`.
 - `ui/MainTab.kt` — the AuthZ Matrix module: personas, catalog, matrix, activity, findings
   (search/severity filter, export, cURL/Repeater actions), plus sweep confirmation/progress.
+- `ui/SessionPersonaDialog.kt` — right-click "use this session as persona" (cookie capture).
 - `ui/dashboard/*Module.kt` — Home, Matrix, Payloads, and (private build) PwnDoc modules.
 - `handler/ProxyHttpHandler.kt` — captures traffic and drives auto modes.
 - `handler/AuthzContextMenu.kt` — right-click actions.
@@ -73,6 +76,12 @@ branch-specific. Do not add private PwnDoc references to shared files.
   discovered from JWTs can never produce the CRITICAL anonymous-access finding on their own.
   `TokenSwapper` strips `Authorization`, the configured auth header/cookie, and any other
   header/cookie carrying a JWT, so cookie-based sessions don't leak into the anon replay.
+- **Cookie personas** carry a `Persona.cookies` bundle and use `TokenLocation.COOKIE`. Identity
+  matching/dedupe uses stable cookies (`session`, `sid`, …) and deliberately excludes CSRF/XSRF;
+  the full bundle is still sent on replay. Custom opaque cookie names are manual (Set cookies /
+  Use session as persona). Opaque cookies have no expiry metadata, so they are refreshed only when
+  forced or when a JWT inside the bundle is expired. JWTs discovered inside cookies become cookie
+  personas in `syncPersonasFromTokens()` (same token, cookie bundle).
 - **Expired tokens are never sent** for a non-anonymous persona; the replay engine skips them
   (and tries a configured refresh first).
 - **Auto modes are safe by default**: `SweepPolicy` skips POST/PUT/PATCH/DELETE and destructive

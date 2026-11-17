@@ -74,6 +74,14 @@ object RoleTestDialog {
 
     private fun describe(p: Persona): String {
         if (p.anonymous) return "${p.name}  (${I18n.t("role.st.anon")})"
+        if (p.usesCookies) {
+            val state = if (p.cookies.isEmpty() && p.token.isBlank()) {
+                I18n.t("role.st.noCookies")
+            } else {
+                I18n.t("persona.cookies", if (p.cookies.isEmpty()) 1 else p.cookies.size)
+            }
+            return "${p.name}  [$state]"
+        }
         val info = Jwt.parse(p.token)
         val state = when {
             p.token.isBlank() -> I18n.t("role.st.noToken")

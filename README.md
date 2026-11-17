@@ -27,8 +27,9 @@ IDOR), while the one correctly-enforced endpoint (`POST …/delete`) stays **gre
 
 | Feature | What it does |
 |---------|-------------|
-| **JWT auto-discovery** | Scans proxy history + live traffic; no pasting |
-| **Persona auto-creation** | One persona per distinct role from captured tokens |
+| **Identity auto-discovery** | Scans proxy history + live traffic for JWTs and cookie sessions; no pasting |
+| **Persona auto-creation** | One persona per JWT role; captured cookie sessions can be promoted in one click |
+| **Cookie-based roles** | Full cookie bundles (session + CSRF), replay + lower-privilege matching |
 | **⚡ Auto sweep** | One click: scan, rank, test recent requests with lower roles + anonymous, safely by default |
 | **Continuous lower-priv mode** | Browse as admin — every new request is background-tested as lower roles |
 | **Access matrix** | Endpoint × persona, colour-coded verdict |
@@ -44,7 +45,7 @@ IDOR), while the one correctly-enforced endpoint (`POST …/delete`) stays **gre
 
 ## How it works
 
-For every request the extension replays it as each configured **persona** (e.g. `admin`, `user`, anonymous) by swapping the JWT, then classifies each response:
+For every request the extension replays it as each configured **persona** (e.g. `admin`, `user`, anonymous) by swapping its JWT, auth header or cookie bundle, then classifies each response:
 
 | Colour | Verdict | Meaning |
 |--------|---------|---------|
@@ -55,6 +56,8 @@ For every request the extension replays it as each configured **persona** (e.g. 
 | ⬜ grey | `ERROR` | Replay failed |
 
 **Red or amber on a low-privilege or anonymous persona for an admin-only endpoint = likely broken access control.**
+
+Every replay strips the original request's `Authorization`, auth-like cookies and JWT-bearing headers before injecting the persona, so a leftover session cannot authenticate the wrong identity.
 
 ---
 
@@ -69,7 +72,7 @@ Requires JDK 17+. Uses the bundled Gradle wrapper — no Gradle install needed.
 Output: `build/libs/rolebreaker-0.1.0.jar`  
 (fat-jar; bundles Kotlin stdlib, org.json and Gson — Montoya API is provided by Burp at runtime)
 
-Run the test suite (92 tests — JWT, verdict classification, IDOR, findings, filters, export, sweep safety, privilege ranking):
+Run the test suite (112 tests — JWT, cookie sessions, verdict classification, IDOR, findings, filters, export, sweep safety, privilege ranking):
 
 ```bash
 ./gradlew test
@@ -123,29 +126,50 @@ Right-click any request in Proxy history, Repeater, Target…
 
 Enable **"Continuo ↓priv (fondo)"** in the toolbar. As you browse as a high-privilege user, every new in-scope request is automatically replayed in the background as the lower-privilege roles. Safe methods only by default; enable **"Include state-changing"** if you need `POST`/`PUT`/`PATCH`/`DELETE` too. Results appear live in the matrix and Findings tabs.
 
+### Option D — Cookie-authenticated apps
+
+Apps that use an opaque session cookie instead of a JWT are supported through **cookie bundles**:
+
+1. Log in as each role through Burp.
+2. Right-click an authenticated request → **"Use this session as persona…"**, or promote the captured session in **Discovered identities**.
+3. Give each persona a name and order the privilege hierarchy.
+4. Run **Auto sweep** or **test with lower privilege** as usual: requests are matched to the current persona by their cookies, and replayed with each persona's full cookie bundle (session + CSRF + related cookies).
+
+Custom cookie names that the heuristic doesn't recognise can be added manually with **"Set cookies…"**.
+
 ---
 
-## JWT discovery & persona management
+## Identity discovery & persona management
 
-- **"Escanear HTTP history"** — scans Burp proxy history for JWTs (Authorization headers, cookies, bodies). Prompts for how far back to look.
-- **"Crear personas por rol"** — turns the catalog into personas (one per distinct role). Only the freshest valid token per role is kept.
-- **"Fijar token…"** — paste/replace the selected persona's token without editing the read-only summary column.
+- **"Escanear HTTP history"** — scans Burp proxy history for JWTs and cookie sessions (Authorization headers, cookies, Set-Cookie, bodies). Prompts for how far back to look.
+- **"Crear personas por rol"** — turns discovered JWT roles into personas (one per distinct role). Only the freshest valid token per role is kept. Cookie sessions are promoted manually from the catalog or with the right-click action.
+- **"Fijar token…"** — paste/replace the selected persona's JWT/opaque token.
+- **"Fijar cookies…"** — edit the selected persona's full cookie bundle (`session=abc; csrf=xyz`).
 - **"Ordenar privilegios…"** — reorderable list (↑/↓ buttons) to set the privilege hierarchy (top = most privileged). The extension uses this to determine "lower" roles.
 - **"Refrescar caducados"** — force re-login of personas that have an assigned refresh request and an expired token.
 - **"Limpiar personas"** — wipe all personas (including any persisted from previous sessions).
 
-Personas and refresh requests persist across Burp restarts (Burp Preferences). Tokens are only used if valid-in-time — expired tokens are skipped and refreshed automatically when possible.
+Personas and refresh requests persist across Burp restarts (Burp Preferences). JWTs are only used if valid-in-time — expired tokens are skipped and refreshed automatically when possible. Opaque cookie sessions have no visible expiry; assign a refresh request and use **"Test now"** (or refresh manually) when a session goes stale.
 
-An **anonymous** persona strips `Authorization`, its configured header/cookie, and any other header or cookie carrying a JWT — so cookie-based sessions are stripped too. Auto sweep creates one automatically if you don't have one.
+An **anonymous** persona strips `Authorization`, its configured header/cookie, and any other cookie or header carrying session material (JWT or auth-cookie heuristics) — so cookie-based sessions are stripped too. Auto sweep creates one automatically if you don't have one.
 
 ---
 
 ## Token catalog ("Identidades descubiertas")
 
-Shows every unique JWT identity found in traffic, deduplicated by `sub` + role, freshest first. Columns: role, owner, issuer, algorithm, expiry, and a **security note** (`alg:none`, symmetric, no expiry, etc.).
+Shows every unique identity found in traffic: **JWTs** (deduplicated by `sub` + role) and **cookie sessions** (deduplicated by their stable identity-cookie subset). Columns: type, role/cookie, owner, issuer, algorithm, expiry, security note and source.
 
-- **"Promover selección"** → create a persona from the selected token.
-- **"Crackear secreto (HS)"** → offline HMAC brute-force for HS256/384/512 tokens. Tries a built-in list of common secrets, then optionally your own wordlist. A hit means the token is fully forgeable.
+- **"Promover selección"** → create a persona from the selected JWT or cookie session (for a cookie session it asks for a persona name).
+- **"Crackear secreto (HS)"** → offline HMAC brute-force for HS256/384/512 tokens. Cookie sessions are not JWTs; promote them as personas instead.
+
+### Cookie sessions
+
+- Captured from request `Cookie` headers and response `Set-Cookie` headers (live traffic + history scan).
+- A session is stored as the **full cookie bundle**, so CSRF and other related cookies travel with the identity.
+- JWTs found inside a cookie are automatically created as **cookie personas** (not bearer personas), so Spring Session / NextAuth-style apps work out of the box.
+- The catalog deduplicates by stable identity cookies (`session`, `PHPSESSID`, `sid`, …) and ignores rotating CSRF cookies for identity matching.
+- Replaying a cookie persona replaces the original auth cookies while keeping unrelated ones (locale, theme, …).
+- If your app uses a custom opaque cookie name the heuristic doesn't recognise, use **"Set cookies…"** or right-click a request → **"Use this session as persona…"**.
 
 ---
 
@@ -196,6 +220,7 @@ Two mechanisms keep tokens valid during long audits:
 
 1. **Traffic-based refresh** — when a newer, non-expired token with the same `sub` appears in traffic, the persona's token is swapped automatically.
 2. **Re-login** — right-click the login/token-refresh request → *"usar como refresh de una persona…"*, pick the persona and the JSON field where the token lives. When that persona's token expires, the extension replays the saved request and extracts the fresh token. Persisted across Burp restarts.
+3. **Cookie-session refresh** — for cookie personas, the same saved request is replayed and the new `Set-Cookie` values are merged into the persona's bundle (no JSON field needed).
 
 ---
 
@@ -223,8 +248,9 @@ com.authzmatrix
 │   ├── PersonaStore.kt           # personas + token catalog (thread-safe, bounded)
 │   ├── PersonaPersistence.kt     # Burp Preferences serialization (org.json, v2 key)
 │   ├── PrivilegeRanker.kt        # auto-ranks roles by name heuristic
-│   ├── TokenCapture.kt           # harvest JWTs from live traffic
-│   ├── TokenSwapper.kt           # inject / strip token in a request
+│   ├── TokenCapture.kt           # harvest JWTs + cookie sessions from live traffic
+│   ├── TokenSwapper.kt           # inject/strip token, header or cookie bundle
+│   ├── CookieSession.kt          # Cookie header parsing, auth-cookie heuristics, session matching
 │   ├── EnforcementDetector.kt    # response → Verdict (normalise, deny/login regexes)
 │   ├── ReplayEngine.kt           # baseline + per-persona replay
 │   ├── RefreshEngine.kt          # re-login via saved request
@@ -256,6 +282,7 @@ com.authzmatrix
     ├── RefreshAssignDialog.kt
     ├── IdorDialog.kt
     ├── JwtAttackDialog.kt
+    ├── SessionPersonaDialog.kt
     └── dashboard/
         ├── DashboardTab.kt
         ├── DashTheme.kt
@@ -271,6 +298,9 @@ Optional modules can be registered through `core/ModuleRegistry.kt` without touc
 ## Limitations
 
 - JWT signatures are **never validated** — the tool trusts whatever token you configure. The point is to test the *server's* enforcement.
+- Cookie discovery uses a name heuristic (`session`, `PHPSESSID`, `sid`, `auth`, …). Custom opaque cookie names may need **"Set cookies…"** or the right-click **"Use this session as persona…"** action.
+- Opaque cookie sessions have no expiry metadata; if one goes stale, assign a refresh request and use **"Test now"**, or replace the cookies manually.
+- Cookie bundles and JWTs are persisted in Burp Preferences in plain text, like the other captured tokens.
 - The privilege auto-ranking heuristic is a starting point; always confirm via **"Ordenar privilegios…"**.
 - Auto modes are **safe by default**: they skip `POST`/`PUT`/`PATCH`/`DELETE` and destructive paths (`/logout`, `/delete`, …). Enable **"Include state-changing"** only if you accept that replaying can modify data.
 - Auto-mode deduplication is by the full `method + URL` (query included). Enable **"Treat /users/1 and /users/2 as one endpoint"** in the sweep dialog to collapse numeric/UUID IDs.

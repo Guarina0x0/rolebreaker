@@ -2,6 +2,7 @@ package com.authzmatrix.core
 
 import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -60,5 +61,19 @@ class PersonaSyncTest {
         }
         assertTrue(store.capturedTokens.size <= PersonaStore.MAX_CAPTURED_TOKENS)
         assertTrue(store.capturedTokens.isNotEmpty())
+    }
+
+    @Test fun jwtInsideCookieCreatesCookiePersona() {
+        val store = PersonaStore()
+        val future = Instant.now().epochSecond + 3600
+        val token = tok("admin", "a", future)
+        store.capture(token, "src")
+        store.captureCookie(mapOf("session" to token, "csrf" to "csrf-value"), "src")
+
+        store.syncPersonasFromTokens()
+        val admin = store.personas.single { it.name == "admin" }
+        assertTrue(admin.usesCookies, "JWT-in-cookie should become a cookie persona")
+        assertEquals(token, admin.cookies["session"])
+        assertTrue(admin.token.isEmpty(), "the cookie bundle carries the JWT")
     }
 }

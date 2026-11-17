@@ -52,17 +52,32 @@ class ReplayEngine(
 
         for (p in personas) {
             refresher(p) // may re-login / swap in a fresher token
-            // Every request must carry a valid-in-time JWT. Anon is the only deliberately
-            // token-less identity; any other persona without a token, or with an EXPIRED one
-            // (that refresh couldn't renew), is skipped rather than sent.
+            // Every request must carry a valid-in-time identity. Anon is the only deliberately
+            // token-less identity; any other persona without credentials, or with an EXPIRED JWT
+            // (in a header or cookie) that refresh couldn't renew, is skipped rather than sent.
             if (!p.anonymous) {
-                if (p.token.isBlank()) {
-                    api.logging().logToOutput("RoleBreaker: '${p.name}' has no token — skipped (never sent without a JWT)")
-                    continue
-                }
-                if (com.authzmatrix.core.Jwt.parse(p.token)?.isExpired() == true) {
-                    api.logging().logToOutput("RoleBreaker: '${p.name}' has an expired token — skipped (never sends an expired JWT)")
-                    continue
+                if (p.usesCookies) {
+                    val cookies = synchronized(p) { LinkedHashMap(p.cookies) }
+                    if (cookies.isEmpty() && p.token.isBlank()) {
+                        api.logging().logToOutput("RoleBreaker: '${p.name}' has no cookies — skipped (never sent without credentials)")
+                        continue
+                    }
+                    val identity = CookieSession.identitySubset(cookies)
+                    val cookiesToCheck = if (identity.isNotEmpty()) identity.values else cookies.values
+                    val expired = cookiesToCheck.any { Jwt.parse(it)?.isExpired() == true }
+                    if (expired) {
+                        api.logging().logToOutput("RoleBreaker: '${p.name}' has an expired JWT cookie — skipped (never sends an expired JWT)")
+                        continue
+                    }
+                } else {
+                    if (p.token.isBlank()) {
+                        api.logging().logToOutput("RoleBreaker: '${p.name}' has no token — skipped (never sent without a JWT)")
+                        continue
+                    }
+                    if (com.authzmatrix.core.Jwt.parse(p.token)?.isExpired() == true) {
+                        api.logging().logToOutput("RoleBreaker: '${p.name}' has an expired token — skipped (never sends an expired JWT)")
+                        continue
+                    }
                 }
             }
             val swapped = TokenSwapper.apply(original, p)

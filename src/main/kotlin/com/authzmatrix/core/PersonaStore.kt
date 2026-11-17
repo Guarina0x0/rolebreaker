@@ -4,14 +4,18 @@ import com.authzmatrix.model.Persona
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * A token seen on the wire, offered to the user so they can bind it to a persona
- * instead of pasting it by hand (the "auto-capture" flow).
+ * An identity seen on the wire, offered to the user so they can bind it to a persona
+ * instead of pasting credentials by hand (the "auto-capture" flow). For cookie sessions,
+ * [token] is the canonical auth-cookie subset and [cookies] is the full bundle.
  */
 class CapturedToken(
     val token: String,
     val source: String,
     val info: JwtInfo?,
+    val cookies: Map<String, String> = emptyMap(),
 ) {
+    val isCookie: Boolean get() = cookies.isNotEmpty()
+
     override fun equals(other: Any?) = other is CapturedToken && other.token == token
     override fun hashCode() = token.hashCode()
 }
@@ -104,11 +108,41 @@ class PersonaStore {
         fireChanged()
     }
 
+    /**
+     * Record a cookie-based session, deduped by its auth-cookie subset. Non-auth cookies from
+     * newer captures are merged in, so a rotating CSRF cookie doesn't create a new identity.
+     *
+     * @return true when this is a new session (an update of an existing one returns false).
+     */
+    fun captureCookie(cookies: Map<String, String>, source: String): Boolean {
+        if (cookies.isEmpty() || cookies.values.all { it.isBlank() }) return false
+        val identity = CookieSession.identitySubset(cookies)
+        if (identity.isEmpty()) return false
+        val key = CookieHeader.canonical(identity)
+
+        val idx = capturedTokens.indexOfFirst { it.isCookie && it.token == key }
+        if (idx >= 0) {
+            val existing = capturedTokens[idx]
+            if (existing.cookies != cookies) {
+                val merged = LinkedHashMap(existing.cookies)
+                merged.putAll(cookies)
+                capturedTokens[idx] = CapturedToken(key, source, null, merged)
+                fireChanged()
+            }
+            return false
+        }
+
+        capturedTokens += CapturedToken(key, source, null, LinkedHashMap(cookies))
+        trimCaptured()
+        fireChanged()
+        return true
+    }
+
     /** Drop the oldest expired/opaque tokens first, then the oldest active ones. */
     private fun trimCaptured() {
         if (capturedTokens.size <= MAX_CAPTURED_TOKENS) return
         while (capturedTokens.size > MAX_CAPTURED_TOKENS) {
-            val idx = capturedTokens.indexOfFirst { it.info?.isExpired() != false }
+            val idx = capturedTokens.indexOfFirst { it.info?.isExpired() == true }
             capturedTokens.removeAt(if (idx >= 0) idx else 0)
         }
     }
@@ -149,16 +183,43 @@ class PersonaStore {
         var created = 0
         for ((role, toks) in byRole) {
             val best = toks.maxByOrNull { it.info?.exp ?: 0L } ?: continue // freshest active token
+            // A JWT can live in a cookie (Spring Session, NextAuth, …). If we captured the same
+            // token in a cookie bundle, create the persona as a cookie persona automatically.
+            val cookieSession = capturedTokens.firstOrNull {
+                it.isCookie && it.cookies.values.contains(best.token)
+            }
             val existing = personas.firstOrNull { !it.anonymous && it.name == role }
             if (existing != null) {
-                existing.token = best.token
-                existing.ownerSub = best.info?.sub
+                synchronized(existing) {
+                    existing.ownerSub = best.info?.sub
+                    when {
+                        cookieSession != null && existing.location == com.authzmatrix.model.TokenLocation.COOKIE -> {
+                            // Same role, possibly rotated JWT-in-cookie: refresh the bundle.
+                            existing.cookies.putAll(cookieSession.cookies)
+                            existing.token = ""
+                        }
+                        cookieSession != null &&
+                            existing.location == com.authzmatrix.model.TokenLocation.BEARER_HEADER &&
+                            existing.cookies.isEmpty() -> {
+                            existing.location = com.authzmatrix.model.TokenLocation.COOKIE
+                            existing.cookies.putAll(cookieSession.cookies)
+                            existing.token = ""
+                        }
+                        else -> existing.token = best.token
+                    }
+                }
             } else {
                 // Distinct default levels (0,10,20…) so "lower-privilege" works out of the box;
                 // adjust them by hand — lower number = more privilege.
                 val nextLevel = (personas.count { !it.anonymous }) * 10
-                personas += Persona(name = role, token = best.token, ownerSub = best.info?.sub)
-                    .apply { level = nextLevel }
+                val p = Persona(name = role, token = best.token, ownerSub = best.info?.sub)
+                if (cookieSession != null) {
+                    p.location = com.authzmatrix.model.TokenLocation.COOKIE
+                    p.cookies.putAll(cookieSession.cookies)
+                    p.token = ""
+                }
+                p.level = nextLevel
+                personas += p
                 created++
             }
         }

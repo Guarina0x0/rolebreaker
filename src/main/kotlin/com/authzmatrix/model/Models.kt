@@ -37,6 +37,16 @@ class Persona(
 ) {
     val id: Int = nextId.getAndIncrement()
 
+    /**
+     * Cookie bundle for cookie-based sessions (name → value). Empty for bearer/custom-header
+     * personas. A bundle lets us swap a whole session (session + CSRF + other auth cookies)
+     * instead of a single cookie value.
+     */
+    val cookies: MutableMap<String, String> = LinkedHashMap()
+
+    /** True when this persona is applied through the Cookie header. */
+    val usesCookies: Boolean get() = location == TokenLocation.COOKIE
+
     /** Login/refresh request to replay when this persona's token expires (re-login). */
     var refreshRequest: HttpRequest? = null
 

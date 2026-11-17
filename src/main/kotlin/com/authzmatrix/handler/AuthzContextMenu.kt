@@ -28,6 +28,11 @@ class AuthzContextMenu(private val ctx: AppContext) : ContextMenuItemsProvider {
             com.authzmatrix.ui.RoleTestDialog.open(ctx, requests)
         }
 
+        val asSession = JMenuItem(I18n.t("ctx.useSession"))
+        asSession.addActionListener {
+            com.authzmatrix.ui.SessionPersonaDialog.open(ctx, requests.first())
+        }
+
         val allText = if (requests.size > 1) I18n.t("ctx.testAllN", requests.size) else I18n.t("ctx.testAll")
         val item = JMenuItem(allText)
         item.addActionListener {
@@ -49,7 +54,7 @@ class AuthzContextMenu(private val ctx: AppContext) : ContextMenuItemsProvider {
         asRefresh.addActionListener {
             com.authzmatrix.ui.RefreshAssignDialog.open(ctx, requests.first())
         }
-        return listOf(autoLower, asRole, item, idor, jwtAttacks, asRefresh)
+        return listOf(autoLower, asRole, asSession, item, idor, jwtAttacks, asRefresh)
     }
 
     private fun collect(event: ContextMenuEvent): List<burp.api.montoya.http.message.requests.HttpRequest> {

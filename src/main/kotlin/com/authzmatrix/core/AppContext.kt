@@ -63,19 +63,45 @@ class AppContext(val api: MontoyaApi) {
         replay.refresher = { p -> maybeRefresh(p) }
     }
 
-    /** Re-login a persona if its token is expired and it has a refresh request. Thread-safe per persona. */
-    fun maybeRefresh(p: com.authzmatrix.model.Persona) {
-        if (p.anonymous || p.refreshRequest == null) return
+    /**
+     * Re-login a persona if needed. JWT personas refresh when their token is expired; cookie
+     * personas refresh when a JWT inside the bundle is expired (or when [force] is set, e.g. the
+     * "Test now" action in the refresh dialog). Thread-safe per persona.
+     *
+     * @return true when credentials were actually updated.
+     */
+    fun refreshPersona(p: com.authzmatrix.model.Persona, force: Boolean = false): Boolean {
+        if (p.anonymous || p.refreshRequest == null) return false
         synchronized(p) {
+            if (p.usesCookies) {
+                val identity = CookieSession.identitySubset(p.cookies)
+                val values = if (identity.isNotEmpty()) identity.values else p.cookies.values
+                val expiredJwt = values.any { Jwt.parse(it)?.isExpired() == true }
+                if (!force && !expiredJwt) return false
+                val fresh = refreshEngine.refreshCookies(p) ?: return false
+                if (fresh.isEmpty()) return false
+                p.cookies.putAll(fresh)
+                p.location = com.authzmatrix.model.TokenLocation.COOKIE
+                store.captureCookie(p.cookies, I18n.t("refresh.reloginSrc", p.name))
+                api.logging().logToOutput("RoleBreaker: '${p.name}' cookies refreshed")
+                return true
+            }
+
             val cur = Jwt.parse(p.token)
-            if (cur != null && !cur.isExpired()) return // still valid — another thread may have refreshed
-            val tok = refreshEngine.refresh(p) ?: return
-            if (tok == p.token) return
+            if (!force && cur != null && !cur.isExpired()) return false
+            val tok = refreshEngine.refresh(p) ?: return false
+            if (tok == p.token) return false
             p.token = tok
             Jwt.parse(tok)?.sub?.let { p.ownerSub = it }
             store.capture(tok, I18n.t("refresh.reloginSrc", p.name)) // adds to catalog + persists + refreshes UI
             api.logging().logToOutput("RoleBreaker: '${p.name}' re-logged in, new token obtained")
+            return true
         }
+    }
+
+    /** Backwards-compatible helper used by the replay engine. */
+    fun maybeRefresh(p: com.authzmatrix.model.Persona) {
+        refreshPersona(p)
     }
 
     /** Force-refresh every persona whose token is expired (used by the toolbar button). */
@@ -178,11 +204,21 @@ class AppContext(val api: MontoyaApi) {
         return if (levelsConfigured) candidates.filter { it.anonymous || it.level > current.level } else candidates
     }
 
-    /** Persona whose identity matches the request's token (by sub, then role). */
+    /** Persona whose identity matches the request's JWT or cookie session. */
     fun currentPersonaFor(req: HttpRequest): com.authzmatrix.model.Persona? {
-        val info = extractToken(req)?.let { Jwt.parse(it) } ?: return null
-        return store.personas.firstOrNull { !it.anonymous && (it.ownerSub == info.sub || Jwt.parse(it.token)?.sub == info.sub) }
-            ?: store.personas.firstOrNull { !it.anonymous && Jwt.parse(it.token)?.role == info.role }
+        val info = extractToken(req)?.let { Jwt.parse(it) }
+        if (info != null) {
+            store.personas.firstOrNull {
+                !it.anonymous && (it.ownerSub == info.sub || Jwt.parse(it.token)?.sub == info.sub)
+            }?.let { return it }
+            store.personas.firstOrNull { !it.anonymous && Jwt.parse(it.token)?.role == info.role }?.let { return it }
+        }
+
+        val requestCookies = CookieHeader.parse(req.headerValue("Cookie"))
+        if (requestCookies.isNotEmpty()) {
+            CookieSession.matchPersona(requestCookies, store.personas)?.let { return it }
+        }
+        return null
     }
 
     private fun extractToken(req: HttpRequest): String? {

@@ -24,8 +24,8 @@ or have explicit written permission to test.
 
 - It replays HTTP requests with swapped tokens and can send forged JWTs. Only point it
   at targets you are authorized to test.
-- It never validates signatures and never sends expired/blank tokens, but it will send
-  the tokens you provide — treat captured tokens as sensitive.
+- It never validates signatures and never sends expired/blank tokens, but it will send the
+  tokens or cookie bundles you provide — treat captured tokens and cookies as sensitive.
 - You are responsible for complying with all applicable laws and program rules.
 
 Using this tool against systems without authorization may be illegal.

@@ -28,17 +28,27 @@ class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() 
         else -> String::class.java
     }
 
-    override fun isCellEditable(r: Int, c: Int) = c != TOKEN_COLUMN
+    override fun isCellEditable(r: Int, c: Int): Boolean {
+        if (c == TOKEN_COLUMN) return false
+        // A cookie bundle is edited through the "Set cookies…" dialog, not this table.
+        if (c == 4 && store.personas[r].usesCookies && store.personas[r].cookies.isNotEmpty()) return false
+        return true
+    }
 
     override fun getValueAt(r: Int, c: Int): Any {
         val p = store.personas[r]
+        val cookies = synchronized(p) { LinkedHashMap(p.cookies) }
         return when (c) {
             0 -> p.enabled
             1 -> p.name
             2 -> p.anonymous
             3 -> p.location
-            4 -> if (p.location == TokenLocation.COOKIE) p.cookieName else p.headerName
-            5 -> tokenSummary(p)
+            4 -> when {
+                p.location == TokenLocation.COOKIE && cookies.isNotEmpty() -> cookies.keys.joinToString(", ")
+                p.location == TokenLocation.COOKIE -> p.cookieName
+                else -> p.headerName
+            }
+            5 -> tokenSummary(p, cookies)
             6 -> p.level.toString()
             else -> ""
         }
@@ -62,8 +72,14 @@ class PersonaTableModel(private val store: PersonaStore) : AbstractTableModel() 
         fireTableRowsUpdated(r, r)
     }
 
-    private fun tokenSummary(p: Persona): String {
+    private fun tokenSummary(p: Persona, cookies: Map<String, String>): String {
         if (p.anonymous) return I18n.t("persona.anon")
+        if (p.usesCookies) {
+            if (cookies.isEmpty() && p.token.isBlank()) return I18n.t("persona.noCookies")
+            val count = if (cookies.isEmpty()) 1 else cookies.size
+            val names = if (cookies.isEmpty()) p.cookieName else cookies.keys.joinToString(", ")
+            return "${I18n.t("persona.cookies", count)} · $names"
+        }
         if (p.token.isBlank()) return I18n.t("persona.noToken")
         val info = Jwt.parse(p.token)
         val flag = when {

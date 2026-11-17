@@ -71,17 +71,18 @@ object RefreshAssignDialog {
         }
         Thread({
             try {
-                val tok = ctx.refreshEngine.refresh(p)
+                val ok = ctx.refreshPersona(p, force = true)
                 SwingUtilities.invokeLater {
-                    if (tok == null) {
+                    if (!ok) {
                         JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("refresh.noToken"), I18n.t("dlg.title"),
                             JOptionPane.WARNING_MESSAGE)
                     } else {
-                        p.token = tok
-                        Jwt.parse(tok)?.sub?.let { p.ownerSub = it }
-                        ctx.store.capture(tok, I18n.t("refresh.reloginSrc", p.name))
-                        val info = Jwt.parse(tok)
-                        JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("refresh.ok", info?.summary() ?: I18n.t("refresh.opaque")),
+                        val summary = if (p.usesCookies) {
+                            I18n.t("refresh.cookiesOk", p.cookies.size)
+                        } else {
+                            Jwt.parse(p.token)?.summary() ?: I18n.t("refresh.opaque")
+                        }
+                        JOptionPane.showMessageDialog(ctx.uiFrame(), I18n.t("refresh.ok", summary),
                             I18n.t("dlg.title"), JOptionPane.INFORMATION_MESSAGE)
                     }
                 }

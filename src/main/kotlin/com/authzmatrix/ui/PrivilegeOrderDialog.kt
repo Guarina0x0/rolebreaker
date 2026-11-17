@@ -82,7 +82,14 @@ object PrivilegeOrderDialog {
         ): Component {
             val c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
             if (value is Persona) {
-                val tag = if (value.anonymous) I18n.t("order.anon") else Jwt.parse(value.token)?.owner?.let { " · $it" } ?: ""
+                val tag = when {
+                    value.anonymous -> I18n.t("order.anon")
+                    value.usesCookies -> {
+                        val names = value.cookies.keys.take(3).joinToString(", ")
+                        if (names.isEmpty()) "" else " · $names"
+                    }
+                    else -> Jwt.parse(value.token)?.owner?.let { " · $it" } ?: ""
+                }
                 text = "${index + 1}.  ${value.name}$tag"
             }
             return c

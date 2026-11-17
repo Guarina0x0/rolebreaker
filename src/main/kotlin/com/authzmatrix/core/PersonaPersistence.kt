@@ -30,14 +30,21 @@ object PersonaPersistence {
                     token = o.optString("token"),
                     location = runCatching { TokenLocation.valueOf(o.optString("location")) }
                         .getOrDefault(TokenLocation.BEARER_HEADER),
-                    headerName = o.optString("headerName"),
-                    cookieName = o.optString("cookieName"),
+                    headerName = o.optString("headerName").ifEmpty { "Authorization" },
+                    cookieName = o.optString("cookieName").ifEmpty { "session" },
                     anonymous = o.optBoolean("anonymous"),
                     enabled = o.optBoolean("enabled", true),
                     ownerSub = o.optString("ownerSub").takeIf { it.isNotEmpty() },
                 )
                 p.level = o.optInt("level", 0)
                 p.refreshTokenField = o.optString("refreshField").takeIf { it.isNotEmpty() }
+                o.optJSONObject("cookies")?.let { cookies ->
+                    val names = cookies.keys()
+                    while (names.hasNext()) {
+                        val name = names.next()
+                        p.cookies[name] = cookies.optString(name)
+                    }
+                }
                 val raw = o.optString("refreshRaw").takeIf { it.isNotEmpty() }
                 val host = o.optString("refreshHost").takeIf { it.isNotEmpty() }
                 if (raw != null && host != null) {
@@ -67,6 +74,11 @@ object PersonaPersistence {
             o.put("cookieName", p.cookieName)
             o.put("anonymous", p.anonymous)
             o.put("enabled", p.enabled)
+            if (p.cookies.isNotEmpty()) {
+                val cookies = JSONObject()
+                p.cookies.forEach { (name, value) -> cookies.put(name, value) }
+                o.put("cookies", cookies)
+            }
             p.ownerSub?.let { o.put("ownerSub", it) }
             p.refreshRequest?.let { o.put("refreshRaw", it.toString()) }
             svc?.let {

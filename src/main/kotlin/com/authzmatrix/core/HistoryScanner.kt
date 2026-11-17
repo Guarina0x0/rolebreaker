@@ -24,9 +24,9 @@ class HistoryScanner(
             if (t != null && t.isBefore(cutoff)) continue
             scanned++
             val req = item.finalRequest()
-            found += capture.harvest(req.toString(), "history: ${req.method()} ${req.path()}", onlyActive)
+            found += capture.inspectRequest(req, onlyActive)
             item.response()?.let { resp ->
-                found += capture.harvest(resp.toString(), "history resp: ${req.method()} ${req.path()}", onlyActive)
+                found += capture.inspectResponse(resp, "history: ${req.method()} ${req.path()}", onlyActive)
             }
         }
         api.logging().logToOutput(
